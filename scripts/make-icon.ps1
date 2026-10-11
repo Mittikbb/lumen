@@ -2,8 +2,8 @@
 #   powershell -File scripts/make-icon.ps1 src-tauri/icons/app-icon.png
 #   npx tauri icon src-tauri/icons/app-icon.png
 #
-# Designed to stay readable at tray size (16-32 px) on dark and light
-# taskbars: a dark capsule with a thick warm rim, orb and equaliser bars.
+# Minimal and flat: the dark island with a single warm "light" on a
+# transparent background. A thin light rim keeps it visible on dark taskbars.
 param([string]$out)
 Add-Type -AssemblyName System.Drawing
 $N = 1024
@@ -12,56 +12,25 @@ $g = [System.Drawing.Graphics]::FromImage($bmp)
 $g.SmoothingMode = 'AntiAlias'
 $g.Clear([System.Drawing.Color]::Transparent)
 
-function Color($a, $r, $gr, $b) { [System.Drawing.Color]::FromArgb($a, $r, $gr, $b) }
-function RoundRect([float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
+function Color($r, $gr, $b) { [System.Drawing.Color]::FromArgb(255, $r, $gr, $b) }
+function Pill([float]$x, [float]$y, [float]$w, [float]$h) {
   $p = New-Object System.Drawing.Drawing2D.GraphicsPath
-  $d = 2 * $r
-  $p.AddArc($x, $y, $d, $d, 180, 90)
-  $p.AddArc($x + $w - $d, $y, $d, $d, 270, 90)
-  $p.AddArc($x + $w - $d, $y + $h - $d, $d, $d, 0, 90)
-  $p.AddArc($x, $y + $h - $d, $d, $d, 90, 90)
+  $p.AddArc($x, $y, $h, $h, 90, 180)
+  $p.AddArc($x + $w - $h, $y, $h, $h, 270, 180)
   $p.CloseFigure()
   return $p
 }
-function Gradient($x1, $y1, $x2, $y2, $c1, $c2) {
-  New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.PointF $x1, $y1), (New-Object System.Drawing.PointF $x2, $y2), $c1, $c2)
-}
 
-# Transparent background: just the island. A soft warm halo and a thick
-# gradient rim keep the dark capsule visible on dark taskbars.
-$cw = 980; $ch = 540; $cx = ($N - $cw) / 2; $cy = ($N - $ch) / 2
+# Capsule: 56x24 on a 64 grid, scaled to 1024.
+$rim = 30
+$w = 896 - $rim; $h = 384 - $rim
+$x = ($N - $w) / 2; $y = ($N - $h) / 2
+$pill = Pill $x $y $w $h
+$g.FillPath((New-Object System.Drawing.SolidBrush (Color 20 20 24)), $pill)
+$g.DrawPath((New-Object System.Drawing.Pen (Color 74 74 84), $rim), $pill)
 
-for ($i = 18; $i -ge 1; $i--) {
-  $grow = $i * 1.2
-  $a = [int](4 + (18 - $i) * 1.1)
-  $halo = RoundRect ($cx - $grow) ($cy - $grow) ($cw + 2 * $grow) ($ch + 2 * $grow) ($ch / 2 + $grow)
-  $g.FillPath((New-Object System.Drawing.SolidBrush (Color $a 247 140 90)), $halo)
-}
-
-$rimW = 64
-$outer = RoundRect $cx $cy $cw $ch ($ch / 2)
-$g.FillPath((Gradient $cx $cy ($cx + $cw) ($cy + $ch) (Color 255 255 196 120) (Color 255 238 82 82)), $outer)
-$cap = RoundRect ($cx + $rimW) ($cy + $rimW) ($cw - 2 * $rimW) ($ch - 2 * $rimW) ($ch / 2 - $rimW)
-$g.FillPath((New-Object System.Drawing.SolidBrush (Color 255 14 12 16)), $cap)
-
-# Orb on the left.
-$orbD = 190; $ox = $cx + 150; $oy = $cy + ($ch - $orbD) / 2
-$orbPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-$orbPath.AddEllipse($ox, $oy, $orbD, $orbD)
-$orb = New-Object System.Drawing.Drawing2D.PathGradientBrush $orbPath
-$orb.CenterPoint = New-Object System.Drawing.PointF ($ox + $orbD * 0.35), ($oy + $orbD * 0.35)
-$orb.CenterColor = Color 255 255 222 165
-$orb.SurroundColors = @(Color 255 245 100 84)
-$g.FillEllipse($orb, $ox, $oy, $orbD, $orbD)
-
-# Equaliser bars on the right.
-$heights = @(110, 210, 160, 250)
-$bw = 54; $gap = 30
-$bx = $cx + $cw - 150 - (4 * $bw + 3 * $gap)
-$base = $cy + $ch / 2 + 125
-for ($k = 0; $k -lt 4; $k++) {
-  $h = $heights[$k]; $x = $bx + $k * ($bw + $gap); $y = $base - $h
-  $g.FillPath((Gradient $x $y $x $base (Color 255 255 196 120) (Color 255 245 100 84)), (RoundRect $x $y $bw $h ($bw / 2)))
-}
+# The light.
+$d = 168
+$g.FillEllipse((New-Object System.Drawing.SolidBrush (Color 245 137 79)), ($x + $h / 2 - $d / 2 + 20), ($N / 2 - $d / 2), $d, $d)
 
 $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
