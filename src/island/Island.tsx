@@ -138,7 +138,10 @@ export function Island() {
                     aria-selected={tab === t.id}
                     onClick={() => {
                       setTab(t.id);
+                      // Search keeps the island open; leaving it hands control
+                      // back to hover, so the island can collapse again.
                       if (t.id === "launcher") launcher.open();
+                      else if (launcherOpen) launcher.close(true);
                     }}
                   >
                     {t.label}

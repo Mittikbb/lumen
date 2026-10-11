@@ -2,8 +2,8 @@
 #   powershell -File scripts/make-icon.ps1 src-tauri/icons/app-icon.png
 #   npx tauri icon src-tauri/icons/app-icon.png
 #
-# Designed to stay readable at tray size (16-32 px): a warm tile in the glow
-# colours with a big black capsule, orb and equaliser bars.
+# Designed to stay readable at tray size (16-32 px) on dark and light
+# taskbars: a dark capsule with a thick warm rim, orb and equaliser bars.
 param([string]$out)
 Add-Type -AssemblyName System.Drawing
 $N = 1024
@@ -27,21 +27,25 @@ function Gradient($x1, $y1, $x2, $y2, $c1, $c2) {
   New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.PointF $x1, $y1), (New-Object System.Drawing.PointF $x2, $y2), $c1, $c2)
 }
 
-# Warm tile: amber top-left to coral bottom-right.
-$tile = RoundRect 24 24 976 976 230
-$g.FillPath((Gradient 0 0 $N $N (Color 255 255 196 120) (Color 255 238 82 82)), $tile)
-$g.SetClip($tile)
+# Transparent background: just the island. A soft warm halo and a thick
+# gradient rim keep the dark capsule visible on dark taskbars.
+$cw = 980; $ch = 540; $cx = ($N - $cw) / 2; $cy = ($N - $ch) / 2
 
-# Soft light at the top for a bit of depth.
-$g.FillEllipse((Gradient 0 -300 0 500 (Color 90 255 255 255) (Color 0 255 255 255)), -200, -420, 1424, 900)
+for ($i = 18; $i -ge 1; $i--) {
+  $grow = $i * 1.2
+  $a = [int](4 + (18 - $i) * 1.1)
+  $halo = RoundRect ($cx - $grow) ($cy - $grow) ($cw + 2 * $grow) ($ch + 2 * $grow) ($ch / 2 + $grow)
+  $g.FillPath((New-Object System.Drawing.SolidBrush (Color $a 247 140 90)), $halo)
+}
 
-# Big black capsule.
-$cw = 820; $ch = 380; $cx = ($N - $cw) / 2; $cy = ($N - $ch) / 2 + 10
-$cap = RoundRect $cx $cy $cw $ch ($ch / 2)
+$rimW = 64
+$outer = RoundRect $cx $cy $cw $ch ($ch / 2)
+$g.FillPath((Gradient $cx $cy ($cx + $cw) ($cy + $ch) (Color 255 255 196 120) (Color 255 238 82 82)), $outer)
+$cap = RoundRect ($cx + $rimW) ($cy + $rimW) ($cw - 2 * $rimW) ($ch - 2 * $rimW) ($ch / 2 - $rimW)
 $g.FillPath((New-Object System.Drawing.SolidBrush (Color 255 14 12 16)), $cap)
 
 # Orb on the left.
-$orbD = 170; $ox = $cx + 105; $oy = $cy + ($ch - $orbD) / 2
+$orbD = 190; $ox = $cx + 150; $oy = $cy + ($ch - $orbD) / 2
 $orbPath = New-Object System.Drawing.Drawing2D.GraphicsPath
 $orbPath.AddEllipse($ox, $oy, $orbD, $orbD)
 $orb = New-Object System.Drawing.Drawing2D.PathGradientBrush $orbPath
@@ -51,10 +55,10 @@ $orb.SurroundColors = @(Color 255 245 100 84)
 $g.FillEllipse($orb, $ox, $oy, $orbD, $orbD)
 
 # Equaliser bars on the right.
-$heights = @(110, 200, 150, 240)
-$bw = 52; $gap = 30
-$bx = $cx + $cw - 110 - (4 * $bw + 3 * $gap)
-$base = $cy + $ch / 2 + 120
+$heights = @(110, 210, 160, 250)
+$bw = 54; $gap = 30
+$bx = $cx + $cw - 150 - (4 * $bw + 3 * $gap)
+$base = $cy + $ch / 2 + 125
 for ($k = 0; $k -lt 4; $k++) {
   $h = $heights[$k]; $x = $bx + $k * ($bw + $gap); $y = $base - $h
   $g.FillPath((Gradient $x $y $x $base (Color 255 255 196 120) (Color 255 245 100 84)), (RoundRect $x $y $bw $h ($bw / 2)))
