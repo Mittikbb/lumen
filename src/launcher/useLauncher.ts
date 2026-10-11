@@ -53,3 +53,29 @@ export function useApps(): { apps: App[]; ai: App | null } {
 
   return { apps, ai };
 }
+
+/** Icons already fetched this session (null = the app has none). */
+const iconCache = new Map<string, string | null>();
+
+/** The app's icon as a data URL, or null while loading / when there is none. */
+export function useAppIcon(id: string): string | null {
+  const [icon, setIcon] = useState(() => iconCache.get(id) ?? null);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    if (iconCache.has(id)) {
+      setIcon(iconCache.get(id)!);
+      return;
+    }
+    let alive = true;
+    invoke<string | null>("launcher_icon", { id }).then((url) => {
+      iconCache.set(id, url);
+      if (alive) setIcon(url);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  return icon;
+}

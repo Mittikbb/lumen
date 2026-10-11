@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { calculate, formatNumber, plainNumber } from "./calc";
 import { convert } from "./units";
 import { fuzzyScore } from "./fuzzy";
-import { App, launcher, useApps } from "./useLauncher";
+import { App, launcher, useAppIcon, useApps } from "./useLauncher";
 
 const MAX_APPS = 5;
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
@@ -19,13 +19,16 @@ const icon = (d: ReactNode) => <svg viewBox="0 0 24 24">{d}</svg>;
 const ICONS = {
   calc: icon(<path d="M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 8h6M9 13h.01M12 13h.01M15 13h.01M9 16h.01M12 16h.01M15 16h.01" />),
   convert: icon(<path d="M7 7h11l-3-3M17 17H6l3 3" />),
-  ai: icon(<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z" />),
   web: icon(<path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />),
   link: icon(<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />),
 };
 
-function AppIcon({ name }: { name: string }) {
-  // Stable colour per app until real icons are extracted.
+function AppIcon({ app }: { app: App }) {
+  const icon = useAppIcon(app.id);
+  if (icon) return <img className="app-icon" src={icon} alt="" draggable={false} />;
+
+  // Letter avatar while the icon loads, or for apps without one.
+  const { name } = app;
   const hue = [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
   return (
     <span className="app-letter" style={{ background: `hsl(${hue} 45% 32%)` }}>
@@ -40,7 +43,7 @@ function buildResults(query: string, apps: App[], ai: App | null): Result[] {
 
   if (!q) {
     if (ai) {
-      out.push({ key: "ai", icon: ICONS.ai, title: `Открыть ${ai.name}`, hint: "ИИ", run: () => launcher.run(ai.id) });
+      out.push({ key: "ai", icon: <AppIcon app={ai} />, title: `Открыть ${ai.name}`, hint: "ИИ", run: () => launcher.run(ai.id) });
     }
     return out;
   }
@@ -75,7 +78,7 @@ function buildResults(query: string, apps: App[], ai: App | null): Result[] {
     .forEach(({ app }) =>
       out.push({
         key: `app:${app.id}`,
-        icon: <AppIcon name={app.name} />,
+        icon: <AppIcon app={app} />,
         title: app.name,
         hint: "Приложение",
         run: () => launcher.run(app.id),
@@ -90,7 +93,7 @@ function buildResults(query: string, apps: App[], ai: App | null): Result[] {
   if (ai) {
     out.push({
       key: "ai",
-      icon: ICONS.ai,
+      icon: <AppIcon app={ai} />,
       title: <>Спросить {ai.name}: «{q}»</>,
       hint: "Запрос скопируется — вставь его через Ctrl+V",
       run: () => launcher.askAi(ai.id, q),

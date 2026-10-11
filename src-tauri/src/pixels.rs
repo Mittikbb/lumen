@@ -1,4 +1,4 @@
-//! Image helpers for the clipboard: Windows DIB <-> RGBA, PNG, thumbnails.
+//! Shared image helpers: Windows DIB <-> RGBA, PNG, thumbnails, data URLs.
 
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
@@ -36,7 +36,12 @@ pub fn thumbnail(image: &RgbaImage) -> Option<String> {
         .min(1.0);
     let w = ((image.width() as f32 * scale).round() as u32).max(1);
     let h = ((image.height() as f32 * scale).round() as u32).max(1);
-    let png = encode_png(&imageops::thumbnail(image, w, h))?;
+    png_data_url(&imageops::thumbnail(image, w, h))
+}
+
+/// The image as a `data:image/png;base64,...` URL.
+pub fn png_data_url(image: &RgbaImage) -> Option<String> {
+    let png = encode_png(image)?;
     Some(format!("data:image/png;base64,{}", STANDARD.encode(png)))
 }
 

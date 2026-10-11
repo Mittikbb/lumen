@@ -1,8 +1,10 @@
+mod app_icons;
 mod audio;
 mod clipboard;
 mod launcher;
 mod media;
 mod overlay;
+mod pixels;
 
 use tauri::{
     Manager,
@@ -31,6 +33,7 @@ pub fn run() {
             launcher::launcher_close,
             launcher::launcher_apps,
             launcher::launcher_ai_app,
+            launcher::launcher_icon,
             launcher::launcher_run,
             launcher::launcher_open_url,
             launcher::launcher_copy,

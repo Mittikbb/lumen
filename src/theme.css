@@ -656,6 +656,12 @@ body,
   color: #fff;
 }
 
+.app-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
 .result-main {
   flex: 1;
   min-width: 0;

@@ -31,7 +31,7 @@ use windows::{
     core::{PWSTR, w},
 };
 
-use super::pixels as img;
+use crate::pixels as img;
 
 pub enum Content {
     Text(String),

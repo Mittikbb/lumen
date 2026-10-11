@@ -3,7 +3,6 @@
 //! whatever app has focus. Lumen's window never takes focus, so the user's app
 //! stays active.
 
-mod pixels;
 pub(crate) mod win;
 
 use std::{
@@ -18,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use windows::Win32::System::DataExchange::GetClipboardSequenceNumber;
 
+use crate::pixels;
 use win::Content;
 
 const MAX_ENTRIES: usize = 60;

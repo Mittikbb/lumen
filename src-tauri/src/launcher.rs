@@ -6,6 +6,7 @@
 //! hands focus back to the previous window when closed.
 
 use std::{
+    collections::HashMap,
     os::windows::process::CommandExt,
     process::Command,
     sync::Mutex,
@@ -22,7 +23,7 @@ use windows::Win32::{
     UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow},
 };
 
-use crate::clipboard::win as clipboard;
+use crate::{app_icons, clipboard::win as clipboard};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The app list is refreshed on open when older than this.
@@ -48,6 +49,8 @@ pub struct Launcher {
     open: Mutex<bool>,
     /// Window that had focus before the launcher opened, as a raw HWND.
     previous: Mutex<isize>,
+    /// App icons as PNG data URLs by AppID; `None` when the shell has none.
+    icons: Mutex<HashMap<String, Option<String>>>,
 }
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
@@ -108,6 +111,25 @@ pub fn launcher_ai_app(launcher: State<Launcher>) -> Option<App> {
         .iter()
         .find_map(|name| apps.iter().find(|a| a.name.starts_with(name)))
         .cloned()
+}
+
+/// Icon for an app, from cache or extracted on a worker thread.
+#[tauri::command]
+pub async fn launcher_icon(app: AppHandle, id: String) -> Option<String> {
+    if let Some(cached) = app.state::<Launcher>().icons.lock().unwrap().get(&id) {
+        return cached.clone();
+    }
+    let key = id.clone();
+    let icon = tauri::async_runtime::spawn_blocking(move || app_icons::icon_data_url(&key))
+        .await
+        .ok()
+        .flatten();
+    app.state::<Launcher>()
+        .icons
+        .lock()
+        .unwrap()
+        .insert(id, icon.clone());
+    icon
 }
 
 #[tauri::command]
@@ -222,9 +244,18 @@ fn refresh_apps(app: &AppHandle) {
     apps.dedup_by(|a, b| a.name == b.name && a.id == b.id);
 
     let launcher = app.state::<Launcher>();
-    *launcher.apps.lock().unwrap() = apps;
+    *launcher.apps.lock().unwrap() = apps.clone();
     *launcher.loaded.lock().unwrap() = Some(Instant::now());
     let _ = app.emit("lumen://apps", ());
+
+    // Warm the icon cache so results show icons as soon as you type.
+    for a in apps {
+        if launcher.icons.lock().unwrap().contains_key(&a.id) {
+            continue;
+        }
+        let icon = app_icons::icon_data_url(&a.id);
+        launcher.icons.lock().unwrap().insert(a.id, icon);
+    }
 }
 
 /// Uninstallers, docs and links that clutter app search.
