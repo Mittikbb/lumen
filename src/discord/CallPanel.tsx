@@ -104,17 +104,22 @@ export function CallPanel({ voice }: { voice: Voice }) {
 }
 
 /** Collapsed island during a call: a stack of avatars, who's talking glows. */
-export function MiniCall({ voice }: { voice: Voice }) {
+export function MiniCall({ voice, speakerRight }: { voice: Voice; speakerRight?: boolean }) {
   const speaking = voice.members.filter((m) => m.speaking);
+  const isSpeaking = speaking.length > 0;
   const shown = [...speaking, ...voice.members.filter((m) => !m.speaking)].slice(0, 4);
+  const alignRight = Boolean(speakerRight && isSpeaking);
+
   return (
-    <div className="mini-call">
+    <div className={`mini-call${alignRight ? " speaker-right" : ""}`}>
       <span className="mini-avatars">
         {shown.map((m) => (
           <Avatar key={m.id} member={m} size="small" />
         ))}
       </span>
-      <span className="mini-title">{speaking[0]?.name ?? voice.channel}</span>
+      <span className="mini-title">
+        {speaking[0]?.name ?? voice.channel}
+      </span>
       {(voice.mute || voice.deaf) && <span className="mini-call-muted">{voice.deaf ? HEADPHONES_OFF : MIC_OFF}</span>}
     </div>
   );

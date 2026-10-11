@@ -5,7 +5,7 @@ import { isTauri } from "../island/env";
 import type { City } from "../weather/useWeather";
 
 export type GlowLevel = "off" | "soft" | "normal" | "bright";
-export type Accent = "sunset" | "ocean" | "mint" | "rose" | "violet" | "ice";
+export type Accent = "sunset" | "rose" | "violet" | "midnight" | "ocean" | "mint" | "ice";
 export type Speed = "slow" | "normal" | "fast";
 export type Bounce = "calm" | "normal" | "springy";
 export type SearchEngine = "google" | "yandex" | "duckduckgo" | "bing";
@@ -77,6 +77,9 @@ export interface DisplayPrefs {
   /** Monitor name; null for the primary one. */
   monitor: string | null;
   hideFullscreen: boolean;
+  hideMaximized: boolean;
+  x?: number | null;
+  y?: number | null;
 }
 
 export interface ClipboardPrefs {
@@ -100,6 +103,11 @@ export interface DiscordPrefs {
   clientSecret: string;
   voice: boolean;
   presence: boolean;
+  speakerRight: boolean;
+}
+
+export interface MediaPrefs {
+  volumeSlider: boolean;
 }
 
 export interface Settings {
@@ -123,6 +131,7 @@ export interface Settings {
   search: { engine: SearchEngine };
   discord: DiscordPrefs;
   updates: { auto: boolean };
+  media: MediaPrefs;
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] | null ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -137,11 +146,11 @@ export const DEFAULT_SETTINGS: Settings = {
   city: null,
   look: { glow: "normal", accent: "sunset", artColors: true, beat: true, lean: true },
   island: {
-    width: 220,
-    height: 40,
-    expandedWidth: 560,
-    radius: 30,
-    offsetTop: 12,
+    width: 176,
+    height: 35,
+    expandedWidth: 570,
+    radius: 24,
+    offsetTop: 25,
     openDelay: 120,
     closeDelay: 380,
     pull: 1,
@@ -149,13 +158,14 @@ export const DEFAULT_SETTINGS: Settings = {
   collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true },
   notices: { copy: true, shelf: true, rain: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
-  display: { monitor: null, hideFullscreen: true },
+  display: { monitor: null, hideFullscreen: true, hideMaximized: false, x: null, y: null },
   clipboard: { limit: 60, keepDays: 0, ignore: [] },
   shelf: { limit: 40 },
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },
   search: { engine: "google" },
-  discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true },
+  discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true, speakerRight: false },
   updates: { auto: true },
+  media: { volumeSlider: true },
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

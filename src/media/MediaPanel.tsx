@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { NowPlaying, formatTime, mediaControl, playerName, trackKey } from "./useMedia";
+import { useVolume } from "./useVolume";
+import { useSettings } from "../settings/useSettings";
 
 /** New track slides in from the right, the old one drifts out to the left. */
 const swap = {
@@ -10,6 +12,9 @@ const swap = {
 };
 
 export function MediaPanel({ media }: { media: NowPlaying | null }) {
+  const settings = useSettings();
+  const showVolume = settings?.media?.volumeSlider ?? true;
+
   if (!media) {
     return <div className="panel empty">Сейчас ничего не играет</div>;
   }
@@ -65,25 +70,139 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
           </div>
         )}
 
-        <div className="media-controls">
-          <button className="icon-btn" aria-label="Предыдущий трек" onClick={() => mediaControl("previous")}>
-            <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5.5v13L9.5 12z" /></svg>
-          </button>
-          <button className="icon-btn play" aria-label={media.playing ? "Пауза" : "Играть"} onClick={() => mediaControl("toggle")}>
-            {media.playing ? (
-              <svg viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>
-            ) : (
-              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            )}
-          </button>
-          <button className="icon-btn" aria-label="Следующий трек" onClick={() => mediaControl("next")}>
-            <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5.5v13L14.5 12z" /></svg>
-          </button>
+        <div className={`media-controls-row${!showVolume ? " no-volume" : ""}`}>
+          {showVolume && <VolumeSlider app={media.app} />}
+
+          <div className="media-controls">
+            <button className="icon-btn" aria-label="Предыдущий трек" onClick={() => mediaControl("previous")}>
+              <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5.5v13L9.5 12z" /></svg>
+            </button>
+            <button className="icon-btn play" aria-label={media.playing ? "Пауза" : "Играть"} onClick={() => mediaControl("toggle")}>
+              {media.playing ? (
+                <svg viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>
+              ) : (
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              )}
+            </button>
+            <button className="icon-btn" aria-label="Следующий трек" onClick={() => mediaControl("next")}>
+              <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5.5v13L14.5 12z" /></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+export function VolumeSlider({ app }: { app: string }) {
+  const { volume, muted, isAppVolume, setVolume, toggleMute } = useVolume(app);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const displayVolume = muted ? 0 : volume;
+
+  const updateFromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const pos = (e.clientX - rect.left) / rect.width;
+    const clamped = Math.max(0, Math.min(1, pos));
+    setVolume(clamped);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    updateFromPointer(e);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragging) {
+      updateFromPointer(e);
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragging) {
+      setDragging(false);
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.05 : -0.05;
+    setVolume(Math.max(0, Math.min(1, volume + delta)));
+  };
+
+  const percent = Math.round(displayVolume * 100);
+  const tooltipText = isAppVolume
+    ? `Громкость ${playerName(app)}: ${percent}%`
+    : `Общая громкость: ${percent}%`;
+
+  return (
+    <div
+      className={`media-volume${dragging ? " dragging" : ""}${muted ? " muted" : ""}`}
+      onWheel={onWheel}
+      title={tooltipText}
+    >
+      <button
+        type="button"
+        className="icon-btn vol-btn"
+        aria-label={muted ? "Включить звук" : "Выключить звук"}
+        title={muted ? "Включить звук" : "Выключить звук"}
+        onClick={() => toggleMute()}
+      >
+        <VolumeIcon volume={displayVolume} muted={muted} />
+      </button>
+
+      <div
+        ref={trackRef}
+        className="vol-track"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        <div className="vol-bar">
+          <div className="vol-fill" style={{ width: `${displayVolume * 100}%` }} />
+          <div className="vol-thumb" style={{ left: `${displayVolume * 100}%` }} />
+        </div>
+      </div>
+
+      <span className="vol-label">{percent}%</span>
+    </div>
+  );
+}
+
+function VolumeIcon({ volume, muted }: { volume: number; muted: boolean }) {
+  if (muted || volume === 0) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" />
+        <line x1="22" y1="9" x2="16" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <line x1="16" y1="9" x2="22" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (volume < 0.45) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" />
+        <path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24">
+      <path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M19 5a9.5 9.5 0 0 1 0 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 
 /** Album art, or a note placeholder when there is none or it fails to load. */
 export function Art({ src, className }: { src: string | null; className: string }) {

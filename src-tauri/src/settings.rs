@@ -40,9 +40,24 @@ pub struct Settings {
     pub shelf: ShelfPrefs,
     pub discord: DiscordPrefs,
     pub updates: UpdatePrefs,
+    pub media: MediaPrefs,
     /// Frontend-only groups, kept untouched.
     #[serde(flatten)]
     pub rest: Map<String, Value>,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MediaPrefs {
+    pub volume_slider: bool,
+}
+
+impl Default for MediaPrefs {
+    fn default() -> Self {
+        Self {
+            volume_slider: true,
+        }
+    }
 }
 
 /// Where the island lives.
@@ -53,6 +68,11 @@ pub struct Display {
     pub monitor: Option<String>,
     /// Hide while a fullscreen app (game, video) is in front.
     pub hide_fullscreen: bool,
+    /// Hide while a window is maximized (zoomed) on the island's monitor.
+    pub hide_maximized: bool,
+    /// Custom position on virtual screen: (x, y) physical pixels.
+    pub x: Option<i32>,
+    pub y: Option<i32>,
 }
 
 impl Default for Display {
@@ -60,6 +80,9 @@ impl Default for Display {
         Self {
             monitor: None,
             hide_fullscreen: true,
+            hide_maximized: false,
+            x: None,
+            y: None,
         }
     }
 }
@@ -121,6 +144,8 @@ pub struct DiscordPrefs {
     pub voice: bool,
     /// Show what's playing as the Discord status.
     pub presence: bool,
+    /// Align speaker nick to the right edge when someone is speaking.
+    pub speaker_right: bool,
 }
 
 impl Default for DiscordPrefs {
@@ -131,6 +156,7 @@ impl Default for DiscordPrefs {
             client_secret: String::new(),
             voice: true,
             presence: true,
+            speaker_right: false,
         }
     }
 }
