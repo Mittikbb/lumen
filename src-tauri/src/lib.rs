@@ -5,16 +5,16 @@ mod launcher;
 mod media;
 mod overlay;
 mod pixels;
+mod tray;
 
-use tauri::{
-    Manager,
-    menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
-};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Must be registered first: a second launch just exits.
+        .plugin(tauri_plugin_single_instance::init(|_, _, _| {}))
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(overlay::HitRegion::default())
         .manage(media::MediaState::default())
@@ -50,19 +50,7 @@ pub fn run() {
             audio::spawn_analyser(app.handle().clone());
             clipboard::spawn_watcher(app.handle().clone());
             launcher::init(app.handle())?;
-
-            let quit = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&quit])?;
-            TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Lumen")
-                .menu(&menu)
-                .on_menu_event(|app, event| {
-                    if event.id.as_ref() == "quit" {
-                        app.exit(0);
-                    }
-                })
-                .build(app)?;
+            tray::init(app.handle())?;
 
             Ok(())
         })
