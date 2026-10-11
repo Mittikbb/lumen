@@ -823,3 +823,240 @@ body,
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* Weather */
+.wx-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wx-clear,
+.wx-partly {
+  color: #ffc46b;
+}
+
+.wx-rain,
+.wx-drizzle,
+.wx-storm {
+  color: #8ab8ff;
+}
+
+.wx-snow {
+  color: #dfe9ff;
+}
+
+.wx-cloudy,
+.wx-fog {
+  color: var(--island-fg-muted);
+}
+
+.collapsed-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.collapsed-right .clock {
+  margin-left: 0;
+}
+
+.mini-weather {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--island-fg);
+}
+
+.mini-weather .wx-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.notice .wx-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.panel.weather {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.wx-now {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 12px;
+  border-right: 1px solid var(--island-line);
+}
+
+.wx-city {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--island-fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wx-city svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--island-fg-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wx-city:hover svg {
+  opacity: 1;
+}
+
+.wx-temp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 44px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.wx-temp .wx-icon {
+  width: 34px;
+  height: 34px;
+  stroke-width: 1.5;
+}
+
+.wx-text {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.wx-feels {
+  font-size: 11px;
+  color: var(--island-fg-muted);
+}
+
+.wx-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.wx-day {
+  display: grid;
+  grid-template-columns: 58px 20px 34px 28px 1fr 28px;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wx-day-name {
+  color: var(--island-fg);
+}
+
+.wx-chance {
+  font-size: 10px;
+  color: #8ab8ff;
+}
+
+.wx-min {
+  text-align: right;
+  color: var(--island-fg-muted);
+}
+
+.wx-range {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.wx-range i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #8ab8ff, var(--glow-a));
+}
+
+/* Copy feedback: glow flash plus a light sweeping across the capsule */
+.island.copied {
+  animation: copied 0.7s ease-out;
+}
+
+.island.copied::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    color-mix(in srgb, var(--glow-a) 35%, rgba(255, 255, 255, 0.25)) 50%,
+    transparent 70%
+  );
+  animation: copy-sweep 0.6s ease-out forwards;
+}
+
+@keyframes copied {
+  0% {
+    box-shadow:
+      0 0 0 1.5px color-mix(in srgb, var(--glow-a) 80%, transparent),
+      0 0 30px 8px color-mix(in srgb, var(--glow-a) 80%, transparent),
+      0 0 70px 18px color-mix(in srgb, var(--glow-b) 40%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--glow-a) 18%, transparent),
+      0 0 18px 2px color-mix(in srgb, var(--glow-a) 45%, transparent),
+      0 0 42px 6px color-mix(in srgb, var(--glow-b) 18%, transparent);
+  }
+}
+
+@keyframes copy-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.notice-thumb {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.notice rect,
+.notice path {
+  fill: none;
+}

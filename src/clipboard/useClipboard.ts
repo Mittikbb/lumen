@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../island/env";
@@ -29,8 +29,9 @@ export const clipboard = {
   clear: () => isTauri && invoke("clipboard_clear"),
 };
 
-export function useClipboard(): ClipEntry[] {
-  const [entries, setEntries] = useState<ClipEntry[]>([]);
+/** Clipboard history; `null` until the saved history has loaded. */
+export function useClipboard(): ClipEntry[] | null {
+  const [entries, setEntries] = useState<ClipEntry[] | null>(null);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -42,6 +43,31 @@ export function useClipboard(): ClipEntry[] {
   }, []);
 
   return entries;
+}
+
+/**
+ * Calls `onCopy` with each entry that's genuinely new. Re-copying an old entry
+ * (e.g. pasting from history) only moves it up and keeps its id, so it's ignored.
+ */
+export function useCopyEvents(entries: ClipEntry[] | null, onCopy: (entry: ClipEntry) => void) {
+  const newest = useRef<number | null>(null);
+  const callback = useRef(onCopy);
+  callback.current = onCopy;
+
+  useEffect(() => {
+    if (!entries) return;
+    const top = entries.reduce((max, e) => Math.max(max, e.id), 0);
+    const seen = newest.current;
+    newest.current = Math.max(top, seen ?? 0);
+    if (seen === null || top <= seen) return;
+    callback.current(entries.find((e) => e.id === top)!);
+  }, [entries]);
+}
+
+/** One-line preview of an entry for notices. */
+export function clipPreview(entry: ClipEntry) {
+  if (entry.image) return `Изображение ${entry.image.width}×${entry.image.height}`;
+  return entry.text.trim().replace(/\s+/g, " ");
 }
 
 export type ClipKind = "link" | "color" | "code" | "text";

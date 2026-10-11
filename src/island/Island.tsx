@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useCursor } from "./useCursor";
 import { useHitRegion } from "./useHitRegion";
@@ -7,20 +7,33 @@ import { trackKey, useMedia } from "../media/useMedia";
 import { useAudioLevels } from "../media/useAudioLevels";
 import { useGlowFromArt } from "../media/useGlowFromArt";
 import { Art, Bars, MediaPanel } from "../media/MediaPanel";
-import { useClipboard } from "../clipboard/useClipboard";
+import { clipPreview, useClipboard, useCopyEvents } from "../clipboard/useClipboard";
 import { ClipboardPanel } from "../clipboard/ClipboardPanel";
 import { LauncherPanel } from "../launcher/LauncherPanel";
 import { launcher, useLauncherOpen } from "../launcher/useLauncher";
 import { useFileDrop, useShelf } from "../shelf/useShelf";
 import { ShelfPanel } from "../shelf/ShelfPanel";
+import { useWeather } from "../weather/useWeather";
+import { WeatherPanel } from "../weather/WeatherPanel";
+import { WeatherIcon } from "../weather/WeatherIcon";
+import { condition } from "../weather/conditions";
 
 const COLLAPSED = { width: 220, height: 40 };
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
 const NOTICE_WIDTH = 290;
 const NOTICE_MS = 2600;
+const WEATHER_NOTICE_MS = 6000;
+const COPY_NOTICE_MS = 1800;
+/** Matches the .copied animation in theme.css. */
+const COPY_FLASH_MS = 700;
 const EXPANDED = { width: 560, height: 230 };
 /** Tabs with more content get a taller island. */
-const EXPANDED_HEIGHT: Partial<Record<string, number>> = { shelf: 270, clipboard: 320, launcher: 320 };
+const EXPANDED_HEIGHT: Partial<Record<string, number>> = {
+  weather: 300,
+  shelf: 270,
+  clipboard: 320,
+  launcher: 320,
+};
 
 const OPEN_DELAY = 120;
 const CLOSE_DELAY = 380;
@@ -32,6 +45,7 @@ const leanSpring = { stiffness: 260, damping: 18, mass: 0.6 };
 
 const TABS = [
   { id: "media", label: "Медиа" },
+  { id: "weather", label: "Погода" },
   { id: "shelf", label: "Полка" },
   { id: "clipboard", label: "Буфер" },
   { id: "launcher", label: "Поиск" },
@@ -53,7 +67,12 @@ export function Island() {
   const clips = useClipboard();
   const launcherOpen = useLauncherOpen();
   const shelfItems = useShelf();
-  const [notice, setNotice] = useState<{ title: string; detail: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    title: string;
+    detail: string;
+    icon?: ReactNode;
+    ms?: number;
+  } | null>(null);
 
   // Files dragged onto the island land on the shelf.
   const dropping = useFileDrop((names) => {
@@ -65,9 +84,13 @@ export function Island() {
   }, [dropping]);
   useEffect(() => {
     if (!notice) return;
-    const t = setTimeout(() => setNotice(null), NOTICE_MS);
+    const t = setTimeout(() => setNotice(null), notice.ms ?? NOTICE_MS);
     return () => clearTimeout(t);
   }, [notice]);
+
+  const weather = useWeather((alert) =>
+    setNotice({ ...alert, icon: <WeatherIcon sky="rain" />, ms: WEATHER_NOTICE_MS }),
+  );
 
   const expanded = hovered || launcherOpen || dropping;
 
@@ -127,6 +150,32 @@ export function Island() {
   const bumpX = useTransform(() => scaleX.get() * bump.get());
   const bumpY = useTransform(() => scaleY.get() * (2 - bump.get()));
 
+  // Copying anything: a small gulp, a flash of glow with a light sweeping
+  // across the capsule, and (when collapsed) a short "copied" notice.
+  useCopyEvents(clips, (entry) => {
+    animate(bump, [1, 1.06, 0.98, 1], { duration: 0.45, ease: "easeOut" });
+    const el = ref.current;
+    if (el) {
+      el.classList.remove("copied");
+      void el.offsetWidth; // restart the CSS animation on rapid copies
+      el.classList.add("copied");
+      setTimeout(() => el.classList.remove("copied"), COPY_FLASH_MS);
+    }
+    setNotice({
+      title: "Скопировано",
+      detail: clipPreview(entry),
+      icon: entry.image ? (
+        <img className="notice-thumb" src={entry.image.thumb} alt="" />
+      ) : (
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <rect x="9" y="9" width="11" height="11" rx="2.5" />
+          <path d="M5 15V6a2 2 0 0 1 2-2h8" />
+        </svg>
+      ),
+      ms: COPY_NOTICE_MS,
+    });
+  });
+
   const size = expanded
     ? { ...EXPANDED, height: EXPANDED_HEIGHT[tab] ?? EXPANDED.height }
     : notice
@@ -178,10 +227,17 @@ export function Island() {
               </div>
               {tab === "media" ? (
                 <MediaPanel media={media} />
+              ) : tab === "weather" ? (
+                <WeatherPanel
+                  city={weather.city}
+                  forecast={weather.forecast}
+                  error={weather.error}
+                  onCity={weather.setCity}
+                />
               ) : tab === "shelf" ? (
                 <ShelfPanel items={shelfItems} dropping={dropping} />
               ) : tab === "clipboard" ? (
-                <ClipboardPanel entries={clips} />
+                <ClipboardPanel entries={clips ?? []} />
               ) : (
                 <LauncherPanel open={launcherOpen} />
               )}
@@ -201,9 +257,11 @@ export function Island() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden>
-                    <path d="M4 13l4 4L20 7" />
-                  </svg>
+                  {notice.icon ?? (
+                    <svg viewBox="0 0 24 24" aria-hidden>
+                      <path d="M4 13l4 4L20 7" />
+                    </svg>
+                  )}
                   <span className="notice-title">{notice.title}</span>
                   <span className="notice-detail">{notice.detail}</span>
                 </motion.div>
@@ -227,7 +285,15 @@ export function Island() {
               ) : (
                 <>
                   <span className="orb" />
-                  <span className="clock">{time}</span>
+                  <span className="collapsed-right">
+                    {weather.forecast && (
+                      <span className="mini-weather">
+                        <WeatherIcon sky={condition(weather.forecast.code).sky} day={weather.forecast.day} />
+                        {weather.forecast.temp}°
+                      </span>
+                    )}
+                    <span className="clock">{time}</span>
+                  </span>
                 </>
               )}
             </motion.div>

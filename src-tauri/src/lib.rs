@@ -18,12 +18,15 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(overlay::HitRegion::default())
+        .manage(overlay::Focus::default())
         .manage(media::MediaState::default())
         .manage(clipboard::History::default())
         .manage(launcher::Launcher::default())
         .manage(shelf::Shelf::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
+            overlay::overlay_take_focus,
+            overlay::overlay_release_focus,
             media::media_state,
             media::media_control,
             clipboard::clipboard_history,

@@ -7,6 +7,10 @@ use std::{sync::Mutex, thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewWindow};
+use windows::Win32::{
+    Foundation::HWND,
+    UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow},
+};
 
 /// Island bounds in CSS pixels relative to the window, reported by the frontend.
 #[derive(Clone, Copy, Default, Deserialize)]
@@ -36,6 +40,62 @@ const HIT_PADDING: f64 = 4.0;
 #[tauri::command]
 pub fn set_hit_region(rect: Rect, region: State<HitRegion>) {
     *region.0.lock().unwrap() = rect;
+}
+
+/// Keyboard focus is borrowed only while the user types into the island
+/// (launcher, city search) and then handed back.
+#[derive(Default)]
+pub struct Focus {
+    taken: Mutex<bool>,
+    /// Window that had focus before, as a raw HWND.
+    previous: Mutex<isize>,
+}
+
+/// Lets the normally non-activating window take keyboard focus.
+pub fn take_focus(app: &AppHandle) -> tauri::Result<()> {
+    let focus = app.state::<Focus>();
+    {
+        let mut taken = focus.taken.lock().unwrap();
+        if !*taken {
+            *focus.previous.lock().unwrap() = unsafe { GetForegroundWindow() }.0 as isize;
+        }
+        *taken = true;
+    }
+    let window = app
+        .get_webview_window("main")
+        .expect("main window is missing");
+    window.set_focusable(true)?;
+    window.set_focus()
+}
+
+/// Makes the window non-activating again, optionally refocusing the app the
+/// user was in before.
+pub fn release_focus(app: &AppHandle, restore: bool) {
+    let focus = app.state::<Focus>();
+    {
+        let mut taken = focus.taken.lock().unwrap();
+        if !*taken {
+            return;
+        }
+        *taken = false;
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focusable(false);
+    }
+    let previous = *focus.previous.lock().unwrap();
+    if restore && previous != 0 {
+        let _ = unsafe { SetForegroundWindow(HWND(previous as *mut _)) };
+    }
+}
+
+#[tauri::command]
+pub fn overlay_take_focus(app: AppHandle) -> Result<(), String> {
+    take_focus(&app).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn overlay_release_focus(app: AppHandle, restore_focus: bool) {
+    release_focus(&app, restore_focus);
 }
 
 pub fn dock_to_top(window: &WebviewWindow) -> tauri::Result<()> {

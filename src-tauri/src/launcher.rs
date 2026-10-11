@@ -18,12 +18,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
-use windows::Win32::{
-    Foundation::HWND,
-    UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow},
-};
 
-use crate::{clipboard::win as clipboard, shell_image};
+use crate::{clipboard::win as clipboard, overlay, shell_image};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The app list is refreshed on open when older than this.
@@ -47,8 +43,6 @@ pub struct Launcher {
     apps: Mutex<Vec<App>>,
     loaded: Mutex<Option<Instant>>,
     open: Mutex<bool>,
-    /// Window that had focus before the launcher opened, as a raw HWND.
-    previous: Mutex<isize>,
     /// App icons as PNG data URLs by AppID; `None` when the shell has none.
     icons: Mutex<HashMap<String, Option<String>>>,
 }
@@ -174,18 +168,8 @@ pub fn launcher_ask_ai(app: AppHandle, id: String, question: String) -> Result<(
 
 fn open_launcher(app: &AppHandle) -> tauri::Result<()> {
     let launcher = app.state::<Launcher>();
-    let window = app
-        .get_webview_window("main")
-        .expect("main window is missing");
-    {
-        let mut open = launcher.open.lock().unwrap();
-        if !*open {
-            *launcher.previous.lock().unwrap() = unsafe { GetForegroundWindow() }.0 as isize;
-        }
-        *open = true;
-    }
-    window.set_focusable(true)?;
-    window.set_focus()?;
+    *launcher.open.lock().unwrap() = true;
+    overlay::take_focus(app)?;
     let _ = app.emit("lumen://launcher", true);
 
     let stale = launcher
@@ -210,15 +194,7 @@ fn close(app: &AppHandle, restore_focus: bool) {
         *open = false;
     }
     let _ = app.emit("lumen://launcher", false);
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_focusable(false);
-    }
-    if restore_focus {
-        let previous = *launcher.previous.lock().unwrap();
-        if previous != 0 {
-            let _ = unsafe { SetForegroundWindow(HWND(previous as *mut _)) };
-        }
-    }
+    overlay::release_focus(app, restore_focus);
 }
 
 /// Loads the Start menu app list (classic and Store apps) via PowerShell.
