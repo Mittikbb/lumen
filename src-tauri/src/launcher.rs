@@ -23,7 +23,7 @@ use windows::Win32::{
     UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow},
 };
 
-use crate::{app_icons, clipboard::win as clipboard};
+use crate::{clipboard::win as clipboard, shell_image};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The app list is refreshed on open when older than this.
@@ -120,7 +120,7 @@ pub async fn launcher_icon(app: AppHandle, id: String) -> Option<String> {
         return cached.clone();
     }
     let key = id.clone();
-    let icon = tauri::async_runtime::spawn_blocking(move || app_icons::icon_data_url(&key))
+    let icon = tauri::async_runtime::spawn_blocking(move || shell_image::app_icon(&key))
         .await
         .ok()
         .flatten();
@@ -253,7 +253,7 @@ fn refresh_apps(app: &AppHandle) {
         if launcher.icons.lock().unwrap().contains_key(&a.id) {
             continue;
         }
-        let icon = app_icons::icon_data_url(&a.id);
+        let icon = shell_image::app_icon(&a.id);
         launcher.icons.lock().unwrap().insert(a.id, icon);
     }
 }

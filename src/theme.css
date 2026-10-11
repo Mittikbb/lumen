@@ -680,3 +680,146 @@ body,
   font-size: 11px;
   color: var(--island-fg-muted);
 }
+
+/* Short notice in the collapsed island */
+.notice {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.notice svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: var(--glow-a);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.notice-title {
+  flex: none;
+  font-weight: 600;
+}
+
+.notice-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--island-fg-muted);
+}
+
+/* Shelf */
+.panel.shelf {
+  position: relative;
+  overflow: hidden;
+}
+
+.shelf-grid {
+  list-style: none;
+  margin: 0;
+  padding: 10px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  grid-auto-rows: 104px;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.shelf-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  border-radius: 14px;
+  cursor: grab;
+}
+
+.shelf-tile:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.shelf-tile.missing {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.shelf-thumb {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.shelf-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.shelf-name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 11px;
+  color: var(--island-fg-muted);
+}
+
+.shelf-actions {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.shelf-tile:hover .shelf-actions {
+  opacity: 1;
+}
+
+.shelf-actions .clip-action {
+  width: 22px;
+  height: 22px;
+  background: rgba(20, 20, 24, 0.85);
+}
+
+.panel.shelf-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--island-fg);
+  border: 1.5px dashed color-mix(in srgb, var(--glow-a) 70%, transparent);
+  background: color-mix(in srgb, var(--glow-a) 8%, transparent);
+}
+
+.panel.shelf-drop svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: var(--glow-a);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

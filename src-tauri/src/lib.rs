@@ -1,10 +1,11 @@
-mod app_icons;
 mod audio;
 mod clipboard;
 mod launcher;
 mod media;
 mod overlay;
 mod pixels;
+mod shelf;
+mod shell_image;
 mod tray;
 
 use tauri::Manager;
@@ -20,6 +21,7 @@ pub fn run() {
         .manage(media::MediaState::default())
         .manage(clipboard::History::default())
         .manage(launcher::Launcher::default())
+        .manage(shelf::Shelf::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             media::media_state,
@@ -38,6 +40,14 @@ pub fn run() {
             launcher::launcher_open_url,
             launcher::launcher_copy,
             launcher::launcher_ask_ai,
+            shelf::shelf_list,
+            shelf::shelf_add,
+            shelf::shelf_remove,
+            shelf::shelf_clear,
+            shelf::shelf_open,
+            shelf::shelf_reveal,
+            shelf::shelf_thumb,
+            shelf::shelf_drag,
         ])
         .setup(|app| {
             let window = app
@@ -50,6 +60,7 @@ pub fn run() {
             audio::spawn_analyser(app.handle().clone());
             clipboard::spawn_watcher(app.handle().clone());
             launcher::init(app.handle())?;
+            shelf::init(app.handle());
             tray::init(app.handle())?;
 
             Ok(())

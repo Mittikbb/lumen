@@ -11,11 +11,16 @@ import { useClipboard } from "../clipboard/useClipboard";
 import { ClipboardPanel } from "../clipboard/ClipboardPanel";
 import { LauncherPanel } from "../launcher/LauncherPanel";
 import { launcher, useLauncherOpen } from "../launcher/useLauncher";
+import { useFileDrop, useShelf } from "../shelf/useShelf";
+import { ShelfPanel } from "../shelf/ShelfPanel";
 
 const COLLAPSED = { width: 220, height: 40 };
+/** Collapsed island while showing a short notice, e.g. "added to shelf". */
+const NOTICE_WIDTH = 290;
+const NOTICE_MS = 2600;
 const EXPANDED = { width: 560, height: 230 };
 /** Tabs with more content get a taller island. */
-const EXPANDED_HEIGHT: Partial<Record<string, number>> = { clipboard: 320, launcher: 320 };
+const EXPANDED_HEIGHT: Partial<Record<string, number>> = { shelf: 270, clipboard: 320, launcher: 320 };
 
 const OPEN_DELAY = 120;
 const CLOSE_DELAY = 380;
@@ -27,6 +32,7 @@ const leanSpring = { stiffness: 260, damping: 18, mass: 0.6 };
 
 const TABS = [
   { id: "media", label: "Медиа" },
+  { id: "shelf", label: "Полка" },
   { id: "clipboard", label: "Буфер" },
   { id: "launcher", label: "Поиск" },
 ] as const;
@@ -46,7 +52,24 @@ export function Island() {
   const [tab, setTab] = useState<TabId>("media");
   const clips = useClipboard();
   const launcherOpen = useLauncherOpen();
-  const expanded = hovered || launcherOpen;
+  const shelfItems = useShelf();
+  const [notice, setNotice] = useState<{ title: string; detail: string } | null>(null);
+
+  // Files dragged onto the island land on the shelf.
+  const dropping = useFileDrop((names) => {
+    const detail = names.length > 1 ? `${names[0]} и ещё ${names.length - 1}` : names[0];
+    setNotice({ title: "Положено на полку", detail });
+  });
+  useEffect(() => {
+    if (dropping) setTab("shelf");
+  }, [dropping]);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  const expanded = hovered || launcherOpen || dropping;
 
   // Alt+Space: jump to the search tab. Clicking anywhere else closes it.
   useEffect(() => {
@@ -104,7 +127,11 @@ export function Island() {
   const bumpX = useTransform(() => scaleX.get() * bump.get());
   const bumpY = useTransform(() => scaleY.get() * (2 - bump.get()));
 
-  const size = expanded ? { ...EXPANDED, height: EXPANDED_HEIGHT[tab] ?? EXPANDED.height } : COLLAPSED;
+  const size = expanded
+    ? { ...EXPANDED, height: EXPANDED_HEIGHT[tab] ?? EXPANDED.height }
+    : notice
+      ? { ...COLLAPSED, width: NOTICE_WIDTH }
+      : COLLAPSED;
 
   return (
     <div className="stage">
@@ -151,6 +178,8 @@ export function Island() {
               </div>
               {tab === "media" ? (
                 <MediaPanel media={media} />
+              ) : tab === "shelf" ? (
+                <ShelfPanel items={shelfItems} dropping={dropping} />
               ) : tab === "clipboard" ? (
                 <ClipboardPanel entries={clips} />
               ) : (
@@ -165,7 +194,20 @@ export function Island() {
               animate={{ opacity: 1, transition: { delay: 0.1 } }}
               exit={{ opacity: 0, transition: { duration: 0.08 } }}
             >
-              {media ? (
+              {notice ? (
+                <motion.div
+                  key="notice"
+                  className="notice"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden>
+                    <path d="M4 13l4 4L20 7" />
+                  </svg>
+                  <span className="notice-title">{notice.title}</span>
+                  <span className="notice-detail">{notice.detail}</span>
+                </motion.div>
+              ) : media ? (
                 <>
                   <AnimatePresence mode="popLayout" initial={false}>
                     <motion.div

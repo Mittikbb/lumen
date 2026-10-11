@@ -1,5 +1,6 @@
-//! App icons for the launcher, taken from the same shell source the Start menu
-//! uses (`shell:AppsFolder\<AppID>`), so classic and Store apps both work.
+//! Icons and thumbnails from the Windows shell, the same source Explorer and
+//! the Start menu use. Works for apps (`shell:AppsFolder\<AppID>`, classic and
+//! Store) and for files and folders (real previews for images, video, PDF...).
 
 use std::ffi::c_void;
 
@@ -22,31 +23,35 @@ use windows::{
 
 use crate::pixels;
 
-/// Pixel size requested from the shell; displayed at ~22 px, so this stays
-/// crisp on high-DPI screens.
-const ICON_SIZE: i32 = 64;
+/// Launcher icons are shown at ~22 px; 64 keeps them crisp on high-DPI screens.
+const APP_ICON_SIZE: i32 = 64;
 
-/// The app's icon as a PNG data URL.
-pub fn icon_data_url(app_id: &str) -> Option<String> {
-    pixels::png_data_url(&extract(app_id)?)
+/// An installed app's icon as a PNG data URL.
+pub fn app_icon(app_id: &str) -> Option<String> {
+    let name = format!("shell:AppsFolder\\{app_id}");
+    pixels::png_data_url(&extract(&name, APP_ICON_SIZE, true)?)
 }
 
-fn extract(app_id: &str) -> Option<RgbaImage> {
+/// A file's or folder's preview, falling back to its icon.
+pub fn file_thumbnail(path: &str, size: i32) -> Option<RgbaImage> {
+    extract(path, size, false)
+}
+
+/// `parsing_name` is anything the shell resolves: a path or a `shell:` URL.
+fn extract(parsing_name: &str, size: i32, icon_only: bool) -> Option<RgbaImage> {
     unsafe {
         // Shell APIs need COM on this thread; repeated calls are harmless.
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
-        let path = HSTRING::from(format!("shell:AppsFolder\\{app_id}"));
-        let factory: IShellItemImageFactory = SHCreateItemFromParsingName(&path, None).ok()?;
-        let bitmap = factory
-            .GetImage(
-                SIZE {
-                    cx: ICON_SIZE,
-                    cy: ICON_SIZE,
-                },
-                SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK,
-            )
-            .ok()?;
+        let name = HSTRING::from(parsing_name);
+        let factory: IShellItemImageFactory = SHCreateItemFromParsingName(&name, None).ok()?;
+        // Without ICONONLY the shell returns a real preview when it has one.
+        let flags = if icon_only {
+            SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK
+        } else {
+            SIIGBF_BIGGERSIZEOK
+        };
+        let bitmap = factory.GetImage(SIZE { cx: size, cy: size }, flags).ok()?;
         let object = HGDIOBJ(bitmap.0);
 
         let mut info = BITMAP::default();
