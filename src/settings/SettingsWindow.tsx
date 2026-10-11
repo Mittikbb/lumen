@@ -1,7 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { isTauri } from "../island/env";
@@ -14,6 +13,7 @@ import { IslandSection } from "./IslandSection";
 import { LookSection } from "./LookSection";
 import { ModulesSection } from "./ModulesSection";
 import { DiscordSection } from "./DiscordSection";
+import { AboutSection } from "./AboutSection";
 import {
   DEFAULT_SETTINGS,
   formatShortcut,
@@ -26,8 +26,6 @@ import {
   useSettings,
 } from "./useSettings";
 import "./settings.css";
-
-const REPO_URL = "https://github.com/Mittikbb/lumen";
 
 const SECTIONS = [
   { id: "general", label: "Общие" },
@@ -114,7 +112,7 @@ export function SettingsWindow() {
           ) : section === "discord" ? (
             <DiscordSection settings={settings} />
           ) : (
-            <AboutSection />
+            <AboutSection settings={settings} />
           )}
         </div>
       </main>
@@ -510,34 +508,6 @@ function WeatherSection({ settings }: { settings: Settings }) {
         Прогноз от <button className="st-link" onClick={() => open("https://open-meteo.com")}>Open-Meteo</button>.
       </div>
     </>
-  );
-}
-
-/* О Lumen */
-
-function AboutSection() {
-  const [version, setVersion] = useState<string | null>(null);
-  useEffect(() => {
-    if (isTauri) getVersion().then(setVersion);
-  }, []);
-
-  return (
-    <div className="st-about">
-      <div className="island st-about-logo">
-        <span className="orb" />
-      </div>
-      <div className="st-about-name">Lumen</div>
-      <div className="st-row-hint">{version ? `Версия ${version}` : "Версия для разработки"}</div>
-      <p className="st-about-text">Живой остров в верхней части рабочего стола Windows.</p>
-      <div className="st-buttons">
-        <button className="st-button" onClick={() => open(`${REPO_URL}/releases/latest`)}>
-          Последний релиз
-        </button>
-        <button className="st-button quiet" onClick={() => open(REPO_URL)}>
-          GitHub
-        </button>
-      </div>
-    </div>
   );
 }
 

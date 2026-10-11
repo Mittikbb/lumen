@@ -39,6 +39,7 @@ pub struct Settings {
     pub clipboard: ClipboardPrefs,
     pub shelf: ShelfPrefs,
     pub discord: DiscordPrefs,
+    pub updates: UpdatePrefs,
     /// Frontend-only groups, kept untouched.
     #[serde(flatten)]
     pub rest: Map<String, Value>,
@@ -93,6 +94,19 @@ pub struct ShelfPrefs {
 impl Default for ShelfPrefs {
     fn default() -> Self {
         Self { limit: 40 }
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdatePrefs {
+    /// Look for a new release in the background and announce it.
+    pub auto: bool,
+}
+
+impl Default for UpdatePrefs {
+    fn default() -> Self {
+        Self { auto: true }
     }
 }
 

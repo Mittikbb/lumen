@@ -122,6 +122,7 @@ export interface Settings {
   weather: WeatherPrefs;
   search: { engine: SearchEngine };
   discord: DiscordPrefs;
+  updates: { auto: boolean };
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] | null ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -154,6 +155,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },
   search: { engine: "google" },
   discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true },
+  updates: { auto: true },
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

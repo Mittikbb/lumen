@@ -41,6 +41,10 @@ export function useMedia(): NowPlaying | null {
 export function playerName(app: string) {
   const id = app.toLowerCase();
   if (id.includes("spotify")) return "Spotify";
+  // AyuGram and Telega are Telegram forks; check them before Telegram itself.
+  if (id.includes("ayugram")) return "AyuGram";
+  if (id.includes("telega") && !id.includes("telegram")) return "Telega";
+  if (id.includes("telegram")) return "Telegram";
   if (id.includes("yandex")) return "Яндекс Музыка";
   if (id.includes("chrome")) return "Chrome";
   if (id.includes("msedge")) return "Edge";

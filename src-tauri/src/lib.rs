@@ -14,6 +14,7 @@ mod settings;
 mod shelf;
 mod shell_image;
 mod tray;
+mod updates;
 
 use tauri::Manager;
 
@@ -37,6 +38,7 @@ pub fn run() {
         .manage(settings::Store::default())
         .manage(hotkeys::Bindings::default())
         .manage(discord::Discord::default())
+        .manage(updates::Updates::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
@@ -80,6 +82,8 @@ pub fn run() {
             discord::discord_status,
             discord::discord_voice,
             discord::discord_forget,
+            updates::update_check,
+            updates::update_last,
             hotkeys::hotkeys_suspend,
             hotkeys::hotkeys_busy,
         ])
@@ -100,6 +104,7 @@ pub fn run() {
             shelf::init(app.handle());
             tray::init(app.handle())?;
             discord::init(app.handle());
+            updates::spawn_checker(app.handle().clone());
 
             Ok(())
         })

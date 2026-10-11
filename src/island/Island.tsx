@@ -31,14 +31,16 @@ const NOTICE_WIDTH = 290;
 const NOTICE_MS = 2600;
 const WEATHER_NOTICE_MS = 6000;
 const COPY_NOTICE_MS = 1800;
+const UPDATE_NOTICE_MS = 8000;
 /** Matches the .copied animation in theme.css. */
 const COPY_FLASH_MS = 700;
 /** After a specific notice (e.g. OCR), the generic "copied" one stays quiet this long. */
 const QUIET_COPY_MS = 1500;
 const EXPANDED_HEIGHT_DEFAULT = 230;
+const CALL_TAB_WIDTH = 80;
 /** Tabs with more content get a taller island. */
 const EXPANDED_HEIGHT: Partial<Record<string, number>> = {
-  call: 250,
+  call: 262,
   weather: 300,
   shelf: 270,
   clipboard: 320,
@@ -74,6 +76,12 @@ const SETTINGS_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden>
     <circle cx="12" cy="12" r="3" />
     <path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z" />
+  </svg>
+);
+
+const UPDATE_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
   </svg>
 );
 
@@ -208,9 +216,15 @@ export function Island() {
   noticeMsRef.current = noticeMs;
   useEffect(() => {
     if (!isTauri) return;
-    const unlisten = listen<{ title: string; detail: string }>("lumen://notice", (e) => {
+    const unlisten = listen<{ title: string; detail: string; kind?: string }>("lumen://notice", (e) => {
       quietCopyUntil.current = Date.now() + QUIET_COPY_MS;
-      setNotice({ ...e.payload, icon: SCAN_ICON, ms: noticeMsRef.current(NOTICE_MS) });
+      const update = e.payload.kind === "update";
+      setNotice({
+        title: e.payload.title,
+        detail: e.payload.detail,
+        icon: update ? UPDATE_ICON : SCAN_ICON,
+        ms: noticeMsRef.current(update ? UPDATE_NOTICE_MS : NOTICE_MS),
+      });
     });
     return () => {
       unlisten.then((off) => off());
@@ -247,7 +261,11 @@ export function Island() {
 
   const collapsedSize = { width: shape.width, height: shape.height };
   const size = expanded
-    ? { width: shape.expandedWidth, height: EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT }
+    ? {
+        // The extra "Звонок" tab needs room, or the clock gets cut off.
+        width: shape.expandedWidth + (showsTab("call") ? CALL_TAB_WIDTH : 0),
+        height: EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT,
+      }
     : notice
       ? { ...collapsedSize, width: Math.max(NOTICE_WIDTH, shape.width + 70) }
       : voice && showsTab("call")

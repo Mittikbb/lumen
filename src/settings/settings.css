@@ -853,3 +853,25 @@ html.settings-root #root {
 .st-content > * {
   flex-shrink: 0;
 }
+
+.st-button.primary {
+  color: #111;
+  background: linear-gradient(90deg, var(--glow-a), var(--glow-b));
+}
+
+.st-button.primary:hover {
+  filter: brightness(1.08);
+}
+
+.st-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.st-accent {
+  color: var(--glow-a);
+}
+
+.st-about {
+  padding-top: 12px;
+}

@@ -1,20 +1,65 @@
+import { ReactNode } from "react";
 import { discordVoice, Member, Voice } from "./useDiscord";
 
-const MIC = <path d="M12 4a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V7a3 3 0 0 0-3-3zM6 11a6 6 0 0 0 12 0M12 17v3" />;
-const MIC_OFF = <path d="M12 4a3 3 0 0 0-3 3v5a3 3 0 0 0 5.2 2M15 10V7a3 3 0 0 0-5.6-1.5M6 11a6 6 0 0 0 9.5 4.9M18 11a6 6 0 0 1-.4 2M12 17v3M4 4l16 16" />;
-const HEADPHONES = <path d="M4 15v-3a8 8 0 0 1 16 0v3M4 15a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2zM20 15a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2z" />;
-const HEADPHONES_OFF = <path d="M4 15v-3a8 8 0 0 1 13.7-5.7M20 12v3M4 15a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2zM20 15a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2zM4 4l16 16" />;
-const LEAVE = <path d="M4 15.5c4.5-4.6 11.5-4.6 16 0l-2.2 2.2-3-1.4v-2.2a9.5 9.5 0 0 0-5.6 0v2.2l-3 1.4z" />;
+// Icons in the Lucide style (24px grid, 2px rounded strokes).
+const icon = (children: ReactNode) => (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    {children}
+  </svg>
+);
+const MIC = icon(
+  <>
+    <rect x="9" y="2" width="6" height="12" rx="3" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" />
+  </>,
+);
+const MIC_OFF = icon(
+  <>
+    <path d="M2 2l20 20M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1" />
+    <path d="M18.9 13.2A7 7 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M12 19v3" />
+  </>,
+);
+const HEADPHONES = icon(
+  <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />,
+);
+const HEADPHONES_OFF = icon(
+  <path d="M2 2l20 20M21 14h-1.3M9.1 3.5A9 9 0 0 1 21 12v3.3M20.4 20.4A2 2 0 0 1 19 21h-1a2 2 0 0 1-2-2v-3M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 2.6-6.4" />,
+);
+// A handset tipped over, like Discord's "leave call".
+const HANG_UP = icon(
+  <path
+    transform="rotate(135 12 12)"
+    d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"
+  />,
+);
 
 function Avatar({ member, size }: { member: Member; size?: "small" }) {
+  const status = member.deafened ? "deaf" : member.muted ? "muted" : null;
   return (
-    <span
-      className={`call-avatar${member.speaking ? " speaking" : ""}${size ? ` ${size}` : ""}`}
-      title={member.name}
-    >
+    <span className={`call-avatar${member.speaking ? " speaking" : ""}${size ? ` ${size}` : ""}`} title={member.name}>
       <img src={member.avatar} alt="" draggable={false} />
-      {(member.muted || member.deafened) && <i className="call-muted" />}
+      {status && <i className={`call-badge ${status}`}>{status === "deaf" ? HEADPHONES_OFF : MIC_OFF}</i>}
     </span>
+  );
+}
+
+function ControlButton({ label, active, danger, onClick, children }: {
+  label: string;
+  active?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      className={`call-button${active ? " off" : ""}${danger ? " leave" : ""}`}
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -36,23 +81,23 @@ export function CallPanel({ voice }: { voice: Voice }) {
         ))}
       </ul>
       <div className="call-controls">
-        <button
-          className={`call-button${voice.mute ? " off" : ""}`}
-          title={voice.mute ? "Включить микрофон" : "Выключить микрофон"}
+        <ControlButton
+          label={voice.mute ? "Включить микрофон" : "Выключить микрофон"}
+          active={voice.mute}
           onClick={() => discordVoice("mute")}
         >
-          <svg viewBox="0 0 24 24" aria-hidden>{voice.mute ? MIC_OFF : MIC}</svg>
-        </button>
-        <button
-          className={`call-button${voice.deaf ? " off" : ""}`}
-          title={voice.deaf ? "Включить звук" : "Выключить звук"}
+          {voice.mute ? MIC_OFF : MIC}
+        </ControlButton>
+        <ControlButton
+          label={voice.deaf ? "Включить звук" : "Выключить звук"}
+          active={voice.deaf}
           onClick={() => discordVoice("deaf")}
         >
-          <svg viewBox="0 0 24 24" aria-hidden>{voice.deaf ? HEADPHONES_OFF : HEADPHONES}</svg>
-        </button>
-        <button className="call-button leave" title="Отключиться" onClick={() => discordVoice("leave")}>
-          <svg viewBox="0 0 24 24" aria-hidden>{LEAVE}</svg>
-        </button>
+          {voice.deaf ? HEADPHONES_OFF : HEADPHONES}
+        </ControlButton>
+        <ControlButton label="Отключиться" danger onClick={() => discordVoice("leave")}>
+          {HANG_UP}
+        </ControlButton>
       </div>
     </div>
   );
@@ -70,11 +115,7 @@ export function MiniCall({ voice }: { voice: Voice }) {
         ))}
       </span>
       <span className="mini-title">{speaking[0]?.name ?? voice.channel}</span>
-      {voice.mute && (
-        <svg className="mini-call-muted" viewBox="0 0 24 24" aria-hidden>
-          {MIC_OFF}
-        </svg>
-      )}
+      {(voice.mute || voice.deaf) && <span className="mini-call-muted">{voice.deaf ? HEADPHONES_OFF : MIC_OFF}</span>}
     </div>
   );
 }
