@@ -2,7 +2,7 @@
 name = "lumen"
 version = "0.1.0"
 description = "A living island at the top of your Windows desktop"
-authors = ["Artem Medvedev"]
+authors = ["Mittikbb"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
