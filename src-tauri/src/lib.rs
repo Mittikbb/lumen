@@ -1,5 +1,7 @@
 mod audio;
+mod capture;
 mod clipboard;
+mod hotkeys;
 mod launcher;
 mod media;
 mod overlay;
@@ -23,6 +25,7 @@ pub fn run() {
         .manage(clipboard::History::default())
         .manage(launcher::Launcher::default())
         .manage(shelf::Shelf::default())
+        .manage(capture::Capture::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
@@ -51,6 +54,10 @@ pub fn run() {
             shelf::shelf_reveal,
             shelf::shelf_thumb,
             shelf::shelf_drag,
+            capture::capture_start,
+            capture::capture_mode,
+            capture::capture_cancel,
+            capture::capture_finish,
         ])
         .setup(|app| {
             let window = app
@@ -62,7 +69,8 @@ pub fn run() {
             media::spawn_watcher(app.handle().clone());
             audio::spawn_analyser(app.handle().clone());
             clipboard::spawn_watcher(app.handle().clone());
-            launcher::init(app.handle())?;
+            launcher::init(app.handle());
+            hotkeys::init(app.handle())?;
             shelf::init(app.handle());
             tray::init(app.handle())?;
 

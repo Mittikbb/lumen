@@ -1060,3 +1060,107 @@ body,
 .notice path {
   fill: none;
 }
+
+/* Capture buttons in the expanded island header */
+.tools {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.tools + .clock {
+  margin-left: 10px;
+}
+
+.tool {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--island-fg-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tool:hover {
+  color: var(--glow-a);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.tool svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Screen capture overlay (its own window) */
+html.capture-root,
+html.capture-root body,
+html.capture-root #root {
+  background: transparent;
+  overflow: hidden;
+}
+
+.capture {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.capture.selecting {
+  background: transparent;
+}
+
+.capture-rect {
+  position: absolute;
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.55),
+    0 0 0 1.5px var(--glow-a),
+    0 0 18px 2px color-mix(in srgb, var(--glow-a) 55%, transparent);
+}
+
+.capture-size {
+  position: absolute;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--island-fg);
+  background: rgba(11, 11, 14, 0.9);
+  pointer-events: none;
+}
+
+.capture-hint {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--island-fg);
+  background: rgba(11, 11, 14, 0.92);
+  box-shadow: 0 0 24px 2px color-mix(in srgb, var(--glow-a) 35%, transparent);
+  pointer-events: none;
+}
+
+.capture-hint kbd {
+  font: inherit;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--island-fg-muted);
+  border: 1px solid var(--island-line);
+}

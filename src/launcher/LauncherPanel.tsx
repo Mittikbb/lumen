@@ -3,6 +3,8 @@ import { calculate, formatNumber, plainNumber } from "./calc";
 import { convert } from "./units";
 import { fuzzyScore } from "./fuzzy";
 import { App, launcher, useAppIcon, useApps } from "./useLauncher";
+import { invoke } from "@tauri-apps/api/core";
+import { isTauri } from "../island/env";
 
 const MAX_APPS = 5;
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
@@ -20,6 +22,8 @@ const ICONS = {
   calc: icon(<path d="M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 8h6M9 13h.01M12 13h.01M15 13h.01M9 16h.01M12 16h.01M15 16h.01" />),
   convert: icon(<path d="M7 7h11l-3-3M17 17H6l3 3" />),
   web: icon(<path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />),
+  shot: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />),
+  scan: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h8M8 12h8M8 15h5" />),
   link: icon(<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />),
 };
 
@@ -46,6 +50,19 @@ function buildResults(query: string, apps: App[], ai: App | null): Result[] {
       out.push({ key: "ai", icon: <AppIcon app={ai} />, title: `Открыть ${ai.name}`, hint: "ИИ", run: () => launcher.run(ai.id) });
     }
     return out;
+  }
+
+  // Screen capture by keyword: "скрин", "screenshot", "текст", "ocr"...
+  const lower = q.toLowerCase();
+  const startCapture = (mode: "shot" | "text") => {
+    launcher.close(true);
+    if (isTauri) invoke("capture_start", { mode });
+  };
+  if (/^(скрин|снимок|screen|shot)/.test(lower)) {
+    out.push({ key: "shot", icon: ICONS.shot, title: "Скриншот области", hint: "Alt+Shift+S", run: () => startCapture("shot") });
+  }
+  if (/^(текст с|распозн|ocr|скан)/.test(lower)) {
+    out.push({ key: "ocr", icon: ICONS.scan, title: "Текст с экрана", hint: "Alt+Shift+T", run: () => startCapture("text") });
   }
 
   const value = calculate(q);

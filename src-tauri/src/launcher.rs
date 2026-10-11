@@ -16,7 +16,6 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::{clipboard::win as clipboard, overlay, shell_image};
@@ -24,7 +23,6 @@ use crate::{clipboard::win as clipboard, overlay, shell_image};
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The app list is refreshed on open when older than this.
 const APPS_TTL: Duration = Duration::from_secs(300);
-const HOTKEY_RETRY: Duration = Duration::from_secs(5);
 
 /// AI apps to open, in order of preference (matched by Start menu name).
 const AI_APPS: [&str; 4] = ["Claude", "ChatGPT", "Gemini", "Copilot"];
@@ -47,39 +45,19 @@ pub struct Launcher {
     icons: Mutex<HashMap<String, Option<String>>>,
 }
 
-pub fn init(app: &AppHandle) -> tauri::Result<()> {
-    let alt_space = Shortcut::new(Some(Modifiers::ALT), Code::Space);
-    app.plugin(
-        tauri_plugin_global_shortcut::Builder::new()
-            .with_handler(move |app, shortcut, event| {
-                if *shortcut == alt_space && event.state() == ShortcutState::Pressed {
-                    let open = *app.state::<Launcher>().open.lock().unwrap();
-                    if open {
-                        close(app, true);
-                    } else {
-                        let _ = open_launcher(app);
-                    }
-                }
-            })
-            .build(),
-    )?;
-
-    // Another tool (e.g. PowerToys Run) may hold Alt+Space; keep trying so the
-    // launcher starts working as soon as it's freed.
-    let handle = app.clone();
-    thread::spawn(move || {
-        loop {
-            match handle.global_shortcut().register(alt_space) {
-                Ok(()) => break,
-                Err(e) => eprintln!("Alt+Space is busy, retrying: {e}"),
-            }
-            thread::sleep(HOTKEY_RETRY);
-        }
-    });
-
+pub fn init(app: &AppHandle) {
     let handle = app.clone();
     thread::spawn(move || refresh_apps(&handle));
-    Ok(())
+}
+
+/// Alt+Space: opens the launcher, or closes it if it's already open.
+pub fn toggle(app: &AppHandle) {
+    let open = *app.state::<Launcher>().open.lock().unwrap();
+    if open {
+        close(app, true);
+    } else {
+        let _ = open_launcher(app);
+    }
 }
 
 #[tauri::command]

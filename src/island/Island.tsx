@@ -17,6 +17,9 @@ import { useWeather } from "../weather/useWeather";
 import { WeatherPanel } from "../weather/WeatherPanel";
 import { WeatherIcon } from "../weather/WeatherIcon";
 import { condition } from "../weather/conditions";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { isTauri } from "./env";
 
 const COLLAPSED = { width: 220, height: 40 };
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
@@ -26,6 +29,8 @@ const WEATHER_NOTICE_MS = 6000;
 const COPY_NOTICE_MS = 1800;
 /** Matches the .copied animation in theme.css. */
 const COPY_FLASH_MS = 700;
+/** After a specific notice (e.g. OCR), the generic "copied" one stays quiet this long. */
+const QUIET_COPY_MS = 1500;
 const EXPANDED = { width: 560, height: 230 };
 /** Tabs with more content get a taller island. */
 const EXPANDED_HEIGHT: Partial<Record<string, number>> = {
@@ -53,6 +58,22 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+const capture = (mode: "shot" | "text") => isTauri && invoke("capture_start", { mode });
+
+const SHOT_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const SCAN_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+    <path d="M8 9h8M8 12h8M8 15h5" />
+  </svg>
+);
 
 export function Island() {
   const ref = useRef<HTMLDivElement>(null);
@@ -150,6 +171,19 @@ export function Island() {
   const bumpX = useTransform(() => scaleX.get() * bump.get());
   const bumpY = useTransform(() => scaleY.get() * (2 - bump.get()));
 
+  // Notices from the backend, e.g. "text recognised" after OCR.
+  const quietCopyUntil = useRef(0);
+  useEffect(() => {
+    if (!isTauri) return;
+    const unlisten = listen<{ title: string; detail: string }>("lumen://notice", (e) => {
+      quietCopyUntil.current = Date.now() + QUIET_COPY_MS;
+      setNotice({ ...e.payload, icon: SCAN_ICON });
+    });
+    return () => {
+      unlisten.then((off) => off());
+    };
+  }, []);
+
   // Copying anything: a small gulp, a flash of glow with a light sweeping
   // across the capsule, and (when collapsed) a short "copied" notice.
   useCopyEvents(clips, (entry) => {
@@ -161,6 +195,7 @@ export function Island() {
       el.classList.add("copied");
       setTimeout(() => el.classList.remove("copied"), COPY_FLASH_MS);
     }
+    if (Date.now() < quietCopyUntil.current) return;
     setNotice({
       title: "Скопировано",
       detail: clipPreview(entry),
@@ -223,6 +258,24 @@ export function Island() {
                     {t.label}
                   </button>
                 ))}
+                <span className="tools">
+                  <button
+                    className="tool"
+                    aria-label="Скриншот области (Alt+Shift+S)"
+                    title="Скриншот области · Alt+Shift+S"
+                    onClick={() => capture("shot")}
+                  >
+                    {SHOT_ICON}
+                  </button>
+                  <button
+                    className="tool"
+                    aria-label="Текст с экрана (Alt+Shift+T)"
+                    title="Текст с экрана · Alt+Shift+T"
+                    onClick={() => capture("text")}
+                  >
+                    {SCAN_ICON}
+                  </button>
+                </span>
                 <span className="clock">{time}</span>
               </div>
               {tab === "media" ? (
