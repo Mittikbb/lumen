@@ -5,6 +5,8 @@ import { fuzzyScore } from "./fuzzy";
 import { App, launcher, useAppIcon, useApps } from "./useLauncher";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../island/env";
+import { formatShortcut, Hotkeys, openSettings, SearchEngine } from "../settings/useSettings";
+import { ENGINES } from "./engines";
 
 const MAX_APPS = 5;
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
@@ -24,6 +26,7 @@ const ICONS = {
   web: icon(<path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />),
   shot: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />),
   scan: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h8M8 12h8M8 15h5" />),
+  settings: icon(<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z" />),
   link: icon(<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />),
 };
 
@@ -41,7 +44,7 @@ function AppIcon({ app }: { app: App }) {
   );
 }
 
-function buildResults(query: string, apps: App[], ai: App | null): Result[] {
+function buildResults(query: string, apps: App[], ai: App | null, hotkeys: Hotkeys, engine: SearchEngine): Result[] {
   const q = query.trim();
   const out: Result[] = [];
 
@@ -59,10 +62,18 @@ function buildResults(query: string, apps: App[], ai: App | null): Result[] {
     if (isTauri) invoke("capture_start", { mode });
   };
   if (/^(скрин|снимок|screen|shot)/.test(lower)) {
-    out.push({ key: "shot", icon: ICONS.shot, title: "Скриншот области", hint: "Alt+Shift+S", run: () => startCapture("shot") });
+    out.push({ key: "shot", icon: ICONS.shot, title: "Скриншот области", hint: formatShortcut(hotkeys.screenshot), run: () => startCapture("shot") });
   }
   if (/^(текст с|распозн|ocr|скан)/.test(lower)) {
-    out.push({ key: "ocr", icon: ICONS.scan, title: "Текст с экрана", hint: "Alt+Shift+T", run: () => startCapture("text") });
+    out.push({ key: "ocr", icon: ICONS.scan, title: "Текст с экрана", hint: formatShortcut(hotkeys.text), run: () => startCapture("text") });
+  }
+
+  if (/^(настр|settings|lumen)/.test(lower)) {
+    const run = () => {
+      launcher.close(false);
+      openSettings();
+    };
+    out.push({ key: "settings", icon: ICONS.settings, title: "Настройки Lumen", hint: "Lumen", run });
   }
 
   const value = calculate(q);
@@ -120,22 +131,25 @@ function buildResults(query: string, apps: App[], ai: App | null): Result[] {
   out.push({
     key: "web",
     icon: ICONS.web,
-    title: <>Найти в Chrome: «{q}»</>,
-    hint: "Поиск Google",
-    run: () => launcher.openUrl(`https://www.google.com/search?q=${encodeURIComponent(q)}`),
+    title: <>Найти в интернете: «{q}»</>,
+    hint: `Поиск ${(ENGINES[engine] ?? ENGINES.google).name}`,
+    run: () => launcher.openUrl((ENGINES[engine] ?? ENGINES.google).url(q)),
   });
 
   return out;
 }
 
-export function LauncherPanel({ open }: { open: boolean }) {
+export function LauncherPanel({ open, hotkeys, engine }: { open: boolean; hotkeys: Hotkeys; engine: SearchEngine }) {
   const { apps, ai } = useApps();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
 
-  const results = useMemo(() => buildResults(query, apps, ai), [query, apps, ai]);
+  const results = useMemo(
+    () => buildResults(query, apps, ai, hotkeys, engine),
+    [query, apps, ai, hotkeys, engine],
+  );
 
   // Fresh, focused search box every time the launcher opens.
   useEffect(() => {
@@ -182,7 +196,7 @@ export function LauncherPanel({ open }: { open: boolean }) {
           // Clicking the box opens the launcher so the window accepts typing.
           onMouseDown={() => !open && launcher.open()}
         />
-        <kbd>Alt+Space</kbd>
+        <kbd>{formatShortcut(hotkeys.launcher)}</kbd>
       </label>
 
       <ul className="results" ref={list}>

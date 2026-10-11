@@ -17,11 +17,14 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use windows::Win32::System::DataExchange::GetClipboardSequenceNumber;
 
-use crate::pixels;
+use crate::{
+    pixels,
+    settings::{self, ClipboardPrefs},
+};
 use win::Content;
 
-const MAX_ENTRIES: usize = 60;
 const MAX_IMAGES: usize = 20;
+const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 const MAX_TEXT: usize = 20_000;
 const POLL: Duration = Duration::from_millis(250);
 
@@ -95,7 +98,7 @@ impl History {
     }
 
     /// Adds content to the top; an identical existing entry is moved up instead.
-    fn push(&self, content: Content, app: Option<String>) {
+    fn push(&self, content: Content, app: Option<String>, prefs: &ClipboardPrefs) {
         let at = now_ms();
         let (text, image) = match content {
             Content::Text(text) => {
@@ -131,7 +134,7 @@ impl History {
             });
             sort(&mut entries);
         }
-        self.trim();
+        self.trim(prefs);
     }
 
     /// Bumps a matching entry to "just now". Returns whether one was found.
@@ -159,8 +162,13 @@ impl History {
         })
     }
 
-    /// Drops the oldest unpinned entries beyond the text and image limits.
-    fn trim(&self) {
+    /// Drops unpinned entries beyond the size and image limits or older than
+    /// the configured age.
+    fn trim(&self, prefs: &ClipboardPrefs) {
+        let max_entries = prefs.limit.max(1);
+        let expired = |e: &Entry| {
+            prefs.keep_days > 0 && now_ms().saturating_sub(e.at) > prefs.keep_days * DAY_MS
+        };
         let entries = self.snapshot();
         let mut total = 0;
         let mut images = 0;
@@ -169,7 +177,9 @@ impl History {
         for e in &entries {
             total += 1;
             images += e.image.is_some() as usize;
-            if !e.pinned && (total > MAX_ENTRIES || (e.image.is_some() && images > MAX_IMAGES)) {
+            if !e.pinned
+                && (total > max_entries || (e.image.is_some() && images > MAX_IMAGES) || expired(e))
+            {
                 excess.push(e.id);
             }
         }
@@ -248,6 +258,8 @@ pub fn spawn_watcher(app: AppHandle) {
         }
         *history.dir.lock().unwrap() = Some(dir);
     }
+    // Entries may have outlived the keep-days setting while Lumen was off.
+    history.trim(&settings::get(&app).clipboard);
 
     thread::spawn(move || {
         let mut seq = unsafe { GetClipboardSequenceNumber() };
@@ -260,12 +272,23 @@ pub fn spawn_watcher(app: AppHandle) {
             seq = current;
 
             if let Some((content, source)) = win::read() {
+                let prefs = settings::get(&app).clipboard;
+                if source.as_deref().is_some_and(|s| ignored(&prefs, s)) {
+                    continue;
+                }
                 let history = app.state::<History>();
-                history.push(content, source);
+                history.push(content, source, &prefs);
                 history.changed(&app);
             }
         }
     });
+}
+
+/// Whether copies from this app are skipped; names match without ".exe" and case.
+fn ignored(prefs: &ClipboardPrefs, app: &str) -> bool {
+    let norm = |s: &str| s.trim().to_lowercase().trim_end_matches(".exe").to_string();
+    let app = norm(app);
+    prefs.ignore.iter().any(|i| norm(i) == app)
 }
 
 fn now_ms() -> u64 {

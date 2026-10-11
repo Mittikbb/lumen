@@ -31,6 +31,9 @@
   transition:
     --glow-a 1.2s ease,
     --glow-b 1.2s ease;
+  /* Glow strength from the settings: opacity and reach of the halo. */
+  --glow-k: 1;
+  --glow-r: 1;
 
   --radius-expanded: 30px;
   --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -73,26 +76,30 @@ body,
 .island.reactive {
   animation: none;
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--glow-a) calc(18% + 30% * var(--beat)), transparent),
-    0 0 calc(14px + 22px * var(--beat)) calc(1px + 6px * var(--beat))
-      color-mix(in srgb, var(--glow-b) calc(35% + 50% * var(--beat)), transparent),
-    0 0 calc(36px + 40px * var(--beat)) calc(4px + 12px * var(--beat))
-      color-mix(in srgb, var(--glow-a) calc(14% + 26% * var(--beat)), transparent);
+    0 0 0 1px color-mix(in srgb, var(--glow-a) min(100%, (18% + 30% * var(--beat)) * var(--glow-k)), transparent),
+    0 0 calc((14px + 22px * var(--beat)) * var(--glow-r)) calc((1px + 6px * var(--beat)) * var(--glow-r))
+      color-mix(in srgb, var(--glow-b) min(100%, (35% + 50% * var(--beat)) * var(--glow-k)), transparent),
+    0 0 calc((36px + 40px * var(--beat)) * var(--glow-r)) calc((4px + 12px * var(--beat)) * var(--glow-r))
+      color-mix(in srgb, var(--glow-a) min(100%, (14% + 26% * var(--beat)) * var(--glow-k)), transparent);
 }
 
 @keyframes glow {
   0%,
   100% {
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--glow-a) 18%, transparent),
-      0 0 18px 2px color-mix(in srgb, var(--glow-a) 45%, transparent),
-      0 0 42px 6px color-mix(in srgb, var(--glow-b) 18%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--glow-a) calc(18% * var(--glow-k)), transparent),
+      0 0 calc(18px * var(--glow-r)) calc(2px * var(--glow-r))
+        color-mix(in srgb, var(--glow-a) calc(45% * var(--glow-k)), transparent),
+      0 0 calc(42px * var(--glow-r)) calc(6px * var(--glow-r))
+        color-mix(in srgb, var(--glow-b) calc(18% * var(--glow-k)), transparent);
   }
   50% {
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--glow-b) 28%, transparent),
-      0 0 24px 4px color-mix(in srgb, var(--glow-b) 60%, transparent),
-      0 0 56px 10px color-mix(in srgb, var(--glow-a) 24%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--glow-b) calc(28% * var(--glow-k)), transparent),
+      0 0 calc(24px * var(--glow-r)) calc(4px * var(--glow-r))
+        color-mix(in srgb, var(--glow-b) calc(60% * var(--glow-k)), transparent),
+      0 0 calc(56px * var(--glow-r)) calc(10px * var(--glow-r))
+        color-mix(in srgb, var(--glow-a) calc(24% * var(--glow-k)), transparent);
   }
 }
 
@@ -1033,9 +1040,11 @@ body,
   }
   100% {
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--glow-a) 18%, transparent),
-      0 0 18px 2px color-mix(in srgb, var(--glow-a) 45%, transparent),
-      0 0 42px 6px color-mix(in srgb, var(--glow-b) 18%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--glow-a) calc(18% * var(--glow-k)), transparent),
+      0 0 calc(18px * var(--glow-r)) calc(2px * var(--glow-r))
+        color-mix(in srgb, var(--glow-a) calc(45% * var(--glow-k)), transparent),
+      0 0 calc(42px * var(--glow-r)) calc(6px * var(--glow-r))
+        color-mix(in srgb, var(--glow-b) calc(18% * var(--glow-k)), transparent);
   }
 }
 
@@ -1163,4 +1172,193 @@ html.capture-root #root {
   border-radius: 6px;
   color: var(--island-fg-muted);
   border: 1px solid var(--island-line);
+}
+
+/* Motion off: the glow holds still instead of breathing or pulsing. */
+.island.reduced,
+.island.reduced.reactive,
+.island.reduced.copied {
+  animation: none;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--glow-a) calc(18% * var(--glow-k)), transparent),
+    0 0 calc(18px * var(--glow-r)) calc(2px * var(--glow-r))
+      color-mix(in srgb, var(--glow-a) calc(45% * var(--glow-k)), transparent),
+    0 0 calc(42px * var(--glow-r)) calc(6px * var(--glow-r))
+      color-mix(in srgb, var(--glow-b) calc(18% * var(--glow-k)), transparent);
+}
+
+/* Discord call */
+.call-avatar {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.15s;
+}
+
+.call-avatar.small {
+  width: 22px;
+  height: 22px;
+}
+
+.call-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.call-avatar.speaking {
+  box-shadow:
+    0 0 0 2px #3ba55d,
+    0 0 12px 2px rgba(59, 165, 93, 0.55);
+}
+
+.call-muted {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ed4245;
+  box-shadow: 0 0 0 2px var(--island-bg);
+}
+
+.call-avatar.small .call-muted {
+  width: 8px;
+  height: 8px;
+  right: -1px;
+  bottom: -1px;
+}
+
+.panel.call {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.call-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.call-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3ba55d;
+  box-shadow: 0 0 8px #3ba55d;
+}
+
+.call-count {
+  color: var(--island-fg-muted);
+  font-weight: 400;
+}
+
+.call-members {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 12px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.call-members li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 64px;
+}
+
+.call-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--island-fg-muted);
+}
+
+.call-controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.call-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--island-fg);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.call-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.call-button.off {
+  background: rgba(237, 66, 69, 0.22);
+  color: #ff8a8c;
+}
+
+.call-button.leave {
+  background: #ed4245;
+  color: #fff;
+}
+
+.call-button.leave:hover {
+  background: #c93b3e;
+}
+
+.call-button svg,
+.mini-call-muted {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mini-call {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mini-avatars {
+  display: flex;
+  flex: none;
+}
+
+.mini-avatars .call-avatar + .call-avatar {
+  margin-left: -6px;
+}
+
+.mini-call-muted {
+  flex: none;
+  margin-left: auto;
+  width: 15px;
+  height: 15px;
+  color: #ff8a8c;
 }

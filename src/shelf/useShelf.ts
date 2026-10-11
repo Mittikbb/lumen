@@ -76,19 +76,21 @@ export function dragOut(ids: number[]) {
 /**
  * Files dragged from Explorer onto the island. Returns whether a drag is
  * hovering the island; dropped files go on the shelf and `onAdded` gets
- * their names.
+ * their names. Ignores drags while `enabled` is false (shelf tab hidden).
  */
-export function useFileDrop(onAdded: (names: string[]) => void): boolean {
+export function useFileDrop(onAdded: (names: string[]) => void, enabled = true): boolean {
   const [dropping, setDropping] = useState(false);
   const callback = useRef(onAdded);
   callback.current = onAdded;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   useEffect(() => {
     if (!isTauri) return;
     const dragEnd = listen("lumen://shelf-drag-end", () => (draggingOut = false));
 
     const unlisten = getCurrentWebview().onDragDropEvent(({ payload }) => {
-      if (draggingOut) return;
+      if (draggingOut || !enabledRef.current) return;
       if (payload.type === "enter") {
         setDropping(true);
       } else if (payload.type === "leave") {

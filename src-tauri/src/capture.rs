@@ -82,8 +82,10 @@ pub fn cancel(app: &AppHandle) {
     }
 }
 
+/// Async on purpose: the first call creates the selection window, and doing
+/// that from a sync command (inside the webview's IPC callback) deadlocks.
 #[tauri::command]
-pub fn capture_start(app: AppHandle, mode: Mode) {
+pub async fn capture_start(app: AppHandle, mode: Mode) {
     start(&app, mode);
 }
 

@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { updateSettings, WeatherPrefs } from "../settings/useSettings";
 import { isWet } from "./conditions";
 
 /** Weather from Open-Meteo: free, no API key, CORS-enabled. */
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 const GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search";
 
-const REFRESH_MS = 15 * 60 * 1000;
-/** Rain chance (%) in the coming hour that's worth a heads-up. */
-const RAIN_ALERT_CHANCE = 60;
 
-const CITY_KEY = "lumen.weather.city";
+/** Where the city lived before the settings window; moved into the settings once. */
+const LEGACY_CITY_KEY = "lumen.weather.city";
 const ALERTED_KEY = "lumen.weather.alerted";
 
 export interface City {
@@ -45,15 +44,22 @@ export interface RainAlert {
   detail: string;
 }
 
-function loadCity(): City | null {
+/** Marks the move as done; the old key stays, so older versions keep their city. */
+const MIGRATED_KEY = "lumen.weather.migrated";
+
+function takeLegacyCity(): City | null {
   try {
-    return JSON.parse(localStorage.getItem(CITY_KEY) ?? "null");
+    if (localStorage.getItem(MIGRATED_KEY)) return null;
+    localStorage.setItem(MIGRATED_KEY, "1");
+    return JSON.parse(localStorage.getItem(LEGACY_CITY_KEY) ?? "null");
   } catch {
     return null;
   }
 }
 
-export async function searchCities(query: string): Promise<City[]> {
+export const setCity = (city: City | null) => updateSettings({ city });
+
+async function searchCities(query: string): Promise<City[]> {
   const url = `${GEOCODE_URL}?name=${encodeURIComponent(query)}&count=5&language=ru&format=json`;
   const res = await fetch(url);
   if (!res.ok) return [];
@@ -66,7 +72,34 @@ export async function searchCities(query: string): Promise<City[]> {
   }));
 }
 
-async function fetchForecast(city: City): Promise<Forecast> {
+const SEARCH_DEBOUNCE_MS = 300;
+
+/** Cities matching the query, looked up a beat after typing stops. */
+export function useCitySearch(query: string): City[] {
+  const [results, setResults] = useState<City[]>([]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(() => {
+      searchCities(q)
+        .then((r) => alive && setResults(r))
+        .catch(() => alive && setResults([]));
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [query]);
+
+  return results;
+}
+
+async function fetchForecast(city: City, units: WeatherPrefs["units"]): Promise<Forecast> {
   const params = new URLSearchParams({
     latitude: String(city.latitude),
     longitude: String(city.longitude),
@@ -75,6 +108,7 @@ async function fetchForecast(city: City): Promise<Forecast> {
     daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
     timezone: "auto",
     forecast_days: "7",
+    temperature_unit: units === "f" ? "fahrenheit" : "celsius",
   });
   const res = await fetch(`${FORECAST_URL}?${params}`);
   if (!res.ok) throw new Error(`weather ${res.status}`);
@@ -106,10 +140,10 @@ async function fetchForecast(city: City): Promise<Forecast> {
 }
 
 /** A heads-up when it's dry now but rain or snow is likely within the hour. */
-export function rainAlert(f: Forecast): { key: string; alert: RainAlert } | null {
+export function rainAlert(f: Forecast, minChance: number): { key: string; alert: RainAlert } | null {
   if (isWet(f.code)) return null;
   const next = f.hours[1];
-  if (!next || next.rainChance < RAIN_ALERT_CHANCE || !isWet(next.code)) return null;
+  if (!next || next.rainChance < minChance || !isWet(next.code)) return null;
   const snow = [71, 73, 75, 77, 85, 86].includes(next.code);
   return {
     key: next.time,
@@ -121,39 +155,47 @@ export function rainAlert(f: Forecast): { key: string; alert: RainAlert } | null
 }
 
 /**
- * Current weather and forecast for the chosen city, refreshed every 15 min.
- * `onAlert` fires once per upcoming rain spell.
+ * Current weather and forecast for the city from the settings (`undefined`
+ * while they load), refreshed every 15 min. `onAlert` fires once per upcoming
+ * rain spell.
  */
-export function useWeather(onAlert: (alert: RainAlert) => void) {
-  const [city, setCityState] = useState<City | null>(loadCity);
+export function useWeather(
+  city: City | null | undefined,
+  prefs: WeatherPrefs,
+  onAlert: (alert: RainAlert) => void,
+) {
+  const { units, rainChance, refreshMinutes } = prefs;
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [error, setError] = useState(false);
   const alertRef = useRef(onAlert);
   alertRef.current = onAlert;
 
-  const setCity = useCallback((next: City | null) => {
-    try {
-      if (next) localStorage.setItem(CITY_KEY, JSON.stringify(next));
-      else localStorage.removeItem(CITY_KEY);
-    } catch {
-      // Storage unavailable: the city just won't survive a restart.
-    }
-    setForecast(null);
-    setCityState(next);
-  }, []);
+  useEffect(() => {
+    if (city !== null) return;
+    const legacy = takeLegacyCity();
+    if (legacy) setCity(legacy);
+  }, [city]);
+
+  // Settings arrive as fresh objects on every change; only a new place matters.
+  const place = city ? `${city.latitude},${city.longitude}` : "";
+  const cityRef = useRef(city);
+  cityRef.current = city;
 
   useEffect(() => {
+    setForecast(null);
+    setError(false);
+    const city = cityRef.current;
     if (!city) return;
     let alive = true;
 
     const load = async () => {
       try {
-        const f = await fetchForecast(city);
+        const f = await fetchForecast(city, units);
         if (!alive) return;
         setForecast(f);
         setError(false);
 
-        const rain = rainAlert(f);
+        const rain = rainAlert(f, rainChance);
         if (rain && localStorage.getItem(ALERTED_KEY) !== rain.key) {
           localStorage.setItem(ALERTED_KEY, rain.key);
           alertRef.current(rain.alert);
@@ -164,12 +206,12 @@ export function useWeather(onAlert: (alert: RainAlert) => void) {
     };
 
     load();
-    const timer = setInterval(load, REFRESH_MS);
+    const timer = setInterval(load, refreshMinutes * 60 * 1000);
     return () => {
       alive = false;
       clearInterval(timer);
     };
-  }, [city]);
+  }, [place, units, rainChance, refreshMinutes]);
 
-  return { city, setCity, forecast, error };
+  return { forecast, error };
 }

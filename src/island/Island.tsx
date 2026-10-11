@@ -5,7 +5,6 @@ import { useHitRegion } from "./useHitRegion";
 import { useClock } from "./useClock";
 import { trackKey, useMedia } from "../media/useMedia";
 import { useAudioLevels } from "../media/useAudioLevels";
-import { useGlowFromArt } from "../media/useGlowFromArt";
 import { Art, Bars, MediaPanel } from "../media/MediaPanel";
 import { clipPreview, useClipboard, useCopyEvents } from "../clipboard/useClipboard";
 import { ClipboardPanel } from "../clipboard/ClipboardPanel";
@@ -13,15 +12,20 @@ import { LauncherPanel } from "../launcher/LauncherPanel";
 import { launcher, useLauncherOpen } from "../launcher/useLauncher";
 import { useFileDrop, useShelf } from "../shelf/useShelf";
 import { ShelfPanel } from "../shelf/ShelfPanel";
-import { useWeather } from "../weather/useWeather";
+import { setCity, useWeather } from "../weather/useWeather";
 import { WeatherPanel } from "../weather/WeatherPanel";
 import { WeatherIcon } from "../weather/WeatherIcon";
 import { condition } from "../weather/conditions";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "./env";
+import { DEFAULT_SETTINGS, formatShortcut, openSettings, useSettings } from "../settings/useSettings";
+import { useLook } from "../settings/look";
+import { TABS, TabId } from "./tabs";
+import { useDiscord } from "../discord/useDiscord";
+import { CallPanel, MiniCall } from "../discord/CallPanel";
+import type { MotionPrefs } from "../settings/useSettings";
 
-const COLLAPSED = { width: 220, height: 40 };
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
 const NOTICE_WIDTH = 290;
 const NOTICE_MS = 2600;
@@ -31,31 +35,29 @@ const COPY_NOTICE_MS = 1800;
 const COPY_FLASH_MS = 700;
 /** After a specific notice (e.g. OCR), the generic "copied" one stays quiet this long. */
 const QUIET_COPY_MS = 1500;
-const EXPANDED = { width: 560, height: 230 };
+const EXPANDED_HEIGHT_DEFAULT = 230;
 /** Tabs with more content get a taller island. */
 const EXPANDED_HEIGHT: Partial<Record<string, number>> = {
+  call: 250,
   weather: 300,
   shelf: 270,
   clipboard: 320,
   launcher: 320,
 };
 
-const OPEN_DELAY = 120;
-const CLOSE_DELAY = 380;
 /** How far (px) from the island the pointer starts to pull on it. */
 const PULL_RADIUS = 220;
 
-const shapeSpring = { type: "spring", stiffness: 420, damping: 32, mass: 0.9 } as const;
-const leanSpring = { stiffness: 260, damping: 18, mass: 0.6 };
+const SPEED = { slow: 0.55, normal: 1, fast: 1.6 };
+const DAMPING = { calm: 40, normal: 32, springy: 20 };
 
-const TABS = [
-  { id: "media", label: "Медиа" },
-  { id: "weather", label: "Погода" },
-  { id: "shelf", label: "Полка" },
-  { id: "clipboard", label: "Буфер" },
-  { id: "launcher", label: "Поиск" },
-] as const;
-type TabId = (typeof TABS)[number]["id"];
+/** The shape spring for the chosen speed and bounce; instant when motion is off. */
+const shapeTransition = (m: MotionPrefs) =>
+  m.reduced
+    ? { duration: 0 }
+    : ({ type: "spring", stiffness: 420 * SPEED[m.speed], damping: DAMPING[m.bounce], mass: 0.9 } as const);
+
+const leanSpring = { stiffness: 260, damping: 18, mass: 0.6 };
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -65,6 +67,13 @@ const SHOT_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden>
     <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
     <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const SETTINGS_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z" />
   </svg>
 );
 
@@ -78,16 +87,29 @@ const SCAN_ICON = (
 export function Island() {
   const ref = useRef<HTMLDivElement>(null);
   const cursor = useCursor();
-  const time = useClock();
   const media = useMedia();
-  useGlowFromArt(media?.art);
-  const reactive = useAudioLevels() && !!media?.playing;
+  const settings = useSettings();
+  const prefs = settings ?? DEFAULT_SETTINGS;
+  const { island: shape, collapsed: rest, notices, motion: moves } = prefs;
+  const time = useClock(rest);
+  const look = settings?.look;
+  const hotkeys = prefs.hotkeys;
+  const voice = useDiscord().voice;
+  const blur = moves.blur && !moves.reduced;
+  const noticeMs = (ms: number) => ms * notices.duration;
+  useLook(look, media?.art);
+  const reactive = useAudioLevels() && !!media?.playing && look?.beat !== false;
   const track = media ? trackKey(media) : "";
   const [hovered, setHovered] = useState(false);
   const [tab, setTab] = useState<TabId>("media");
   const clips = useClipboard();
   const launcherOpen = useLauncherOpen();
   const shelfItems = useShelf();
+  const hidden = settings?.hiddenTabs ?? [];
+  const tabs = TABS.filter(
+    (t) => t.id === "launcher" || (!hidden.includes(t.id) && (t.id !== "call" || !!voice)),
+  );
+  const showsTab = (id: TabId) => tabs.some((t) => t.id === id);
   const [notice, setNotice] = useState<{
     title: string;
     detail: string;
@@ -98,20 +120,28 @@ export function Island() {
   // Files dragged onto the island land on the shelf.
   const dropping = useFileDrop((names) => {
     const detail = names.length > 1 ? `${names[0]} и ещё ${names.length - 1}` : names[0];
-    setNotice({ title: "Положено на полку", detail });
-  });
+    if (notices.shelf) setNotice({ title: "Положено на полку", detail, ms: noticeMs(NOTICE_MS) });
+  }, showsTab("shelf"));
   useEffect(() => {
     if (dropping) setTab("shelf");
   }, [dropping]);
+  // The open tab was switched off in settings: fall back to the first one left.
+  const tabShown = showsTab(tab);
+  const firstTab = tabs[0].id;
+  useEffect(() => {
+    if (!tabShown) setTab(firstTab);
+  }, [tabShown, firstTab]);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(null), notice.ms ?? NOTICE_MS);
     return () => clearTimeout(t);
   }, [notice]);
 
-  const weather = useWeather((alert) =>
-    setNotice({ ...alert, icon: <WeatherIcon sky="rain" />, ms: WEATHER_NOTICE_MS }),
-  );
+  // A hidden weather tab means no weather at all, so nothing is fetched.
+  const weatherCity = settings && showsTab("weather") ? settings.city : undefined;
+  const weather = useWeather(weatherCity, prefs.weather, (alert) => {
+    if (notices.rain) setNotice({ ...alert, icon: <WeatherIcon sky="rain" />, ms: noticeMs(WEATHER_NOTICE_MS) });
+  });
 
   const expanded = hovered || launcherOpen || dropping;
 
@@ -130,9 +160,9 @@ export function Island() {
   const inside = cursor?.inside ?? false;
   useEffect(() => {
     if (inside === hovered) return;
-    const t = setTimeout(() => setHovered(inside), inside ? OPEN_DELAY : CLOSE_DELAY);
+    const t = setTimeout(() => setHovered(inside), inside ? shape.openDelay : shape.closeDelay);
     return () => clearTimeout(t);
-  }, [inside, hovered]);
+  }, [inside, hovered, shape.openDelay, shape.closeDelay]);
 
   // Liquid lean: while collapsed, the island stretches toward a nearby pointer.
   const x = useSpring(0, leanSpring);
@@ -145,18 +175,19 @@ export function Island() {
     let pull = 0;
     let dx = 0;
     let dy = 0;
-    if (el && cursor && !expanded) {
+    // Strength comes from the pull slider (0 switches it off).
+    if (el && cursor && !expanded && !moves.reduced) {
       const cx = el.offsetLeft + el.offsetWidth / 2;
       const cy = el.offsetTop + el.offsetHeight / 2;
       dx = cursor.x - cx;
       dy = cursor.y - cy;
-      pull = clamp(1 - Math.hypot(dx, dy) / PULL_RADIUS, 0, 1);
+      pull = clamp(1 - Math.hypot(dx, dy) / PULL_RADIUS, 0, 1) * shape.pull;
     }
     x.set(clamp(dx * 0.08, -16, 16) * pull);
     y.set(clamp(dy * 0.05, 0, 8) * pull);
     scaleX.set(1 + 0.07 * pull);
     scaleY.set(1 + 0.1 * pull);
-  }, [cursor, expanded, x, y, scaleX, scaleY]);
+  }, [cursor, expanded, moves.reduced, shape.pull, x, y, scaleX, scaleY]);
 
   // Track change: a quick squash-and-stretch "gulp", layered on top of the lean.
   const bump = useMotionValue(1);
@@ -165,19 +196,21 @@ export function Island() {
     if (!track || track === lastTrack.current) return;
     const first = !lastTrack.current;
     lastTrack.current = track;
-    if (first) return;
+    if (first || !moves.trackBump || moves.reduced) return;
     animate(bump, [1, 1.08, 0.97, 1], { duration: 0.55, ease: "easeOut" });
-  }, [track, bump]);
+  }, [track, bump, moves.trackBump, moves.reduced]);
   const bumpX = useTransform(() => scaleX.get() * bump.get());
   const bumpY = useTransform(() => scaleY.get() * (2 - bump.get()));
 
   // Notices from the backend, e.g. "text recognised" after OCR.
   const quietCopyUntil = useRef(0);
+  const noticeMsRef = useRef(noticeMs);
+  noticeMsRef.current = noticeMs;
   useEffect(() => {
     if (!isTauri) return;
     const unlisten = listen<{ title: string; detail: string }>("lumen://notice", (e) => {
       quietCopyUntil.current = Date.now() + QUIET_COPY_MS;
-      setNotice({ ...e.payload, icon: SCAN_ICON });
+      setNotice({ ...e.payload, icon: SCAN_ICON, ms: noticeMsRef.current(NOTICE_MS) });
     });
     return () => {
       unlisten.then((off) => off());
@@ -187,15 +220,16 @@ export function Island() {
   // Copying anything: a small gulp, a flash of glow with a light sweeping
   // across the capsule, and (when collapsed) a short "copied" notice.
   useCopyEvents(clips, (entry) => {
-    animate(bump, [1, 1.06, 0.98, 1], { duration: 0.45, ease: "easeOut" });
+    const flash = moves.copyFlash && !moves.reduced;
+    if (flash) animate(bump, [1, 1.06, 0.98, 1], { duration: 0.45, ease: "easeOut" });
     const el = ref.current;
-    if (el) {
+    if (el && flash) {
       el.classList.remove("copied");
       void el.offsetWidth; // restart the CSS animation on rapid copies
       el.classList.add("copied");
       setTimeout(() => el.classList.remove("copied"), COPY_FLASH_MS);
     }
-    if (Date.now() < quietCopyUntil.current) return;
+    if (Date.now() < quietCopyUntil.current || !notices.copy) return;
     setNotice({
       title: "Скопировано",
       detail: clipPreview(entry),
@@ -207,28 +241,32 @@ export function Island() {
           <path d="M5 15V6a2 2 0 0 1 2-2h8" />
         </svg>
       ),
-      ms: COPY_NOTICE_MS,
+      ms: noticeMs(COPY_NOTICE_MS),
     });
   });
 
+  const collapsedSize = { width: shape.width, height: shape.height };
   const size = expanded
-    ? { ...EXPANDED, height: EXPANDED_HEIGHT[tab] ?? EXPANDED.height }
+    ? { width: shape.expandedWidth, height: EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT }
     : notice
-      ? { ...COLLAPSED, width: NOTICE_WIDTH }
-      : COLLAPSED;
+      ? { ...collapsedSize, width: Math.max(NOTICE_WIDTH, shape.width + 70) }
+      : voice && showsTab("call")
+        ? { ...collapsedSize, width: Math.max(collapsedSize.width, 250) }
+        : collapsedSize;
+  const fade = (px: number) => (blur ? `blur(${px}px)` : "blur(0px)");
 
   return (
-    <div className="stage">
+    <div className="stage" style={{ paddingTop: shape.offsetTop }}>
       <motion.div
         ref={ref}
-        className={`island${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}`}
+        className={`island${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}`}
         initial={false}
         animate={{
           width: size.width,
           height: size.height,
-          borderRadius: expanded ? 30 : COLLAPSED.height / 2,
+          borderRadius: expanded ? shape.radius : shape.height / 2,
         }}
-        transition={shapeSpring}
+        transition={shapeTransition(moves)}
         style={{ x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" }}
       >
         <AnimatePresence initial={false}>
@@ -236,12 +274,12 @@ export function Island() {
             <motion.div
               key="expanded"
               className="expanded"
-              initial={{ opacity: 0, filter: "blur(6px)" }}
-              animate={{ opacity: 1, filter: "blur(0px)", transition: { delay: 0.08 } }}
-              exit={{ opacity: 0, filter: "blur(6px)", transition: { duration: 0.12 } }}
+              initial={{ opacity: 0, filter: fade(6) }}
+              animate={{ opacity: 1, filter: "blur(0px)", transition: { delay: moves.reduced ? 0 : 0.08 } }}
+              exit={{ opacity: 0, filter: fade(6), transition: { duration: moves.reduced ? 0 : 0.12 } }}
             >
               <div className="tabs" role="tablist">
-                {TABS.map((t) => (
+                {tabs.map((t) => (
                   <button
                     key={t.id}
                     className="tab"
@@ -261,38 +299,47 @@ export function Island() {
                 <span className="tools">
                   <button
                     className="tool"
-                    aria-label="Скриншот области (Alt+Shift+S)"
-                    title="Скриншот области · Alt+Shift+S"
+                    aria-label="Скриншот области"
+                    title={`Скриншот области · ${formatShortcut(hotkeys.screenshot)}`}
                     onClick={() => capture("shot")}
                   >
                     {SHOT_ICON}
                   </button>
                   <button
                     className="tool"
-                    aria-label="Текст с экрана (Alt+Shift+T)"
-                    title="Текст с экрана · Alt+Shift+T"
+                    aria-label="Текст с экрана"
+                    title={`Текст с экрана · ${formatShortcut(hotkeys.text)}`}
                     onClick={() => capture("text")}
                   >
                     {SCAN_ICON}
                   </button>
+                  <button className="tool" aria-label="Настройки" title="Настройки" onClick={openSettings}>
+                    {SETTINGS_ICON}
+                  </button>
                 </span>
                 <span className="clock">{time}</span>
               </div>
-              {tab === "media" ? (
+              {tab === "call" && voice ? (
+                <CallPanel voice={voice} />
+              ) : tab === "media" ? (
                 <MediaPanel media={media} />
               ) : tab === "weather" ? (
-                <WeatherPanel
-                  city={weather.city}
-                  forecast={weather.forecast}
-                  error={weather.error}
-                  onCity={weather.setCity}
-                />
+                settings ? (
+                  <WeatherPanel
+                    city={settings.city}
+                    forecast={weather.forecast}
+                    error={weather.error}
+                    onCity={setCity}
+                  />
+                ) : (
+                  <div className="panel empty">Загружаю погоду…</div>
+                )
               ) : tab === "shelf" ? (
                 <ShelfPanel items={shelfItems} dropping={dropping} />
               ) : tab === "clipboard" ? (
                 <ClipboardPanel entries={clips ?? []} />
               ) : (
-                <LauncherPanel open={launcherOpen} />
+                <LauncherPanel open={launcherOpen} hotkeys={hotkeys} engine={prefs.search.engine} />
               )}
             </motion.div>
           ) : (
@@ -318,16 +365,18 @@ export function Island() {
                   <span className="notice-title">{notice.title}</span>
                   <span className="notice-detail">{notice.detail}</span>
                 </motion.div>
-              ) : media ? (
+              ) : voice && showsTab("call") ? (
+                <MiniCall voice={voice} />
+              ) : media && rest.track ? (
                 <>
                   <AnimatePresence mode="popLayout" initial={false}>
                     <motion.div
                       key={track}
                       className="mini-track"
-                      initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                      initial={{ opacity: 0, y: 10, filter: fade(4) }}
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
-                      transition={{ duration: 0.3 }}
+                      exit={{ opacity: 0, y: -10, filter: fade(4) }}
+                      transition={{ duration: moves.reduced ? 0 : 0.3 }}
                     >
                       <Art src={media.art} className="mini-art" />
                       <span className="mini-title">{media.title}</span>
@@ -339,7 +388,7 @@ export function Island() {
                 <>
                   <span className="orb" />
                   <span className="collapsed-right">
-                    {weather.forecast && (
+                    {rest.weather && weatherCity && weather.forecast && (
                       <span className="mini-weather">
                         <WeatherIcon sky={condition(weather.forecast.code).sky} day={weather.forecast.day} />
                         {weather.forecast.temp}°

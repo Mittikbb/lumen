@@ -14,9 +14,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{pixels, shell_image};
+use crate::{pixels, settings, shell_image};
 
-const MAX_ITEMS: usize = 40;
 /// Tile previews are ~56 px; 128 stays sharp on high-DPI screens.
 const THUMB_SIZE: i32 = 128;
 /// Size of the picture under the cursor while dragging a file out.
@@ -120,7 +119,7 @@ pub fn shelf_add(paths: Vec<String>, app: AppHandle, shelf: State<Shelf>) -> Vec
             );
             id += 1; // unique ids within one drop
         }
-        items.truncate(MAX_ITEMS);
+        items.truncate(settings::get(&app).shelf.limit.max(1));
     }
     shelf.changed(&app);
     added

@@ -1,0 +1,544 @@
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { isTauri } from "../island/env";
+import { useApps } from "../launcher/useLauncher";
+import { City, setCity, useCitySearch } from "../weather/useWeather";
+import { TABS, TabId } from "../island/tabs";
+import { useLook } from "./look";
+import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
+import { IslandSection } from "./IslandSection";
+import { LookSection } from "./LookSection";
+import { ModulesSection } from "./ModulesSection";
+import { DiscordSection } from "./DiscordSection";
+import {
+  DEFAULT_SETTINGS,
+  formatShortcut,
+  heldModifiers,
+  Hotkeys,
+  Settings,
+  shortcutFromEvent,
+  shortcutParts,
+  updateSettings,
+  useSettings,
+} from "./useSettings";
+import "./settings.css";
+
+const REPO_URL = "https://github.com/Mittikbb/lumen";
+
+const SECTIONS = [
+  { id: "general", label: "Общие" },
+  { id: "island", label: "Остров" },
+  { id: "look", label: "Внешний вид" },
+  { id: "keys", label: "Клавиши" },
+  { id: "modules", label: "Модули" },
+  { id: "weather", label: "Погода" },
+  { id: "discord", label: "Discord" },
+  { id: "about", label: "О Lumen" },
+] as const;
+type SectionId = (typeof SECTIONS)[number]["id"];
+
+const SECTION_ICONS: Record<SectionId, ReactNode> = {
+  general: <path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4v6M8 14v6" />,
+  island: <path d="M8 9h8a3 3 0 0 1 0 6H8a3 3 0 0 1 0-6zM4 4h16M4 20h16" />,
+  modules: <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />,
+  discord: <path d="M8 7.5a14 14 0 0 1 8 0M7 17c3 1.4 7 1.4 10 0M5.5 7.5C3.8 10.6 3.3 13.5 3.8 16.6 5.3 17.8 6.8 18.5 8.3 19l1-2M18.5 7.5c1.7 3.1 2.2 6 1.7 9.1-1.5 1.2-3 1.9-4.5 2.4l-1-2M9.5 12.5h.01M14.5 12.5h.01" />,
+  keys: <path d="M4 7h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zM7 10.5h.01M10.5 10.5h.01M14 10.5h.01M17 10.5h.01M8 14h8" />,
+  look: <path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />,
+  weather: <path d="M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9.5a4.3 4.3 0 0 1-.5 8.5z" />,
+  about: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01" />,
+};
+
+const HOTKEY_ROWS: { id: keyof Hotkeys; title: string; hint: string }[] = [
+  { id: "launcher", title: "Поиск", hint: "Программы, калькулятор, вопрос ИИ" },
+  { id: "screenshot", title: "Скриншот области", hint: "Снимок сразу попадает в буфер" },
+  { id: "text", title: "Текст с экрана", hint: "Распознаёт текст и копирует его" },
+];
+
+/** Backend names for actions whose key another app holds. */
+type Action = "launcher" | "screenshot" | "text";
+
+/** The settings window: sections on the left, changes apply instantly. */
+export function SettingsWindow() {
+  const settings = useSettings();
+  const [section, setSection] = useState<SectionId>("general");
+  useLook(settings?.look);
+
+  useEffect(() => {
+    document.documentElement.classList.add("settings-root");
+  }, []);
+
+  return (
+    <div className="settings">
+      <nav className="st-nav" data-tauri-drag-region>
+        <div className="st-brand" data-tauri-drag-region>
+          <span className="orb" />
+          Lumen
+        </div>
+        {SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            className="st-nav-item"
+            aria-current={section === s.id ? "page" : undefined}
+            onClick={() => setSection(s.id)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden>
+              {SECTION_ICONS[s.id]}
+            </svg>
+            {s.label}
+          </button>
+        ))}
+      </nav>
+
+      <main className="st-main">
+        <header className="st-titlebar" data-tauri-drag-region>
+          <h1 data-tauri-drag-region>{SECTIONS.find((s) => s.id === section)!.label}</h1>
+          <WindowButtons />
+        </header>
+        <div className="st-content" key={section}>
+          {!settings ? null : section === "general" ? (
+            <GeneralSection settings={settings} />
+          ) : section === "island" ? (
+            <IslandSection settings={settings} />
+          ) : section === "look" ? (
+            <LookSection settings={settings} />
+          ) : section === "keys" ? (
+            <KeysSection hotkeys={settings.hotkeys} />
+          ) : section === "modules" ? (
+            <ModulesSection settings={settings} />
+          ) : section === "weather" ? (
+            <WeatherSection settings={settings} />
+          ) : section === "discord" ? (
+            <DiscordSection settings={settings} />
+          ) : (
+            <AboutSection />
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function WindowButtons() {
+  if (!isTauri) return null;
+  const win = getCurrentWindow();
+  return (
+    <div className="st-window-buttons">
+      <button aria-label="Свернуть" onClick={() => win.minimize()}>
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <path d="M6 12h12" />
+        </svg>
+      </button>
+      <button className="st-close" aria-label="Закрыть" onClick={() => win.close()}>
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <path d="M7 7l10 10M17 7L7 17" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/* Общие */
+
+function GeneralSection({ settings }: { settings: Settings }) {
+  const autostart = useAutostart();
+  const { apps, aiApps } = useApps();
+  const auto = aiApps[0];
+  const chosen = settings.aiApp;
+  const missing = chosen && !apps.some((a) => a.id === chosen);
+  const others = apps.filter((a) => !aiApps.some((ai) => ai.id === a.id));
+
+  return (
+    <>
+      <div className="st-card">
+        <Row
+          title="Запускать вместе с Windows"
+          hint={autostart === null ? "Работает только в установленной версии" : "Остров появится сразу после входа"}
+        >
+          <Toggle
+            on={!!autostart}
+            disabled={autostart === null}
+            onChange={(on) => invoke<boolean | null>("settings_set_autostart", { on })}
+          />
+        </Row>
+      </div>
+
+      <div className="st-card">
+        <Row title="ИИ-приложение" hint="Открывается из поиска; вопрос копируется — вставь его через Ctrl+V">
+          <select
+            className="st-select"
+            value={chosen ?? ""}
+            onChange={(e) => updateSettings({ aiApp: e.target.value || null })}
+          >
+            <option value="">{auto ? `Автоматически · ${auto.name}` : "Автоматически"}</option>
+            {missing && <option value={chosen ?? ""}>Не найдено</option>}
+            {aiApps.length > 0 && (
+              <optgroup label="ИИ-приложения">
+                {aiApps.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {others.length > 0 && (
+              <optgroup label="Все приложения">
+                {others.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </Row>
+        <BrowserRow chosen={settings.browser} />
+      </div>
+
+      <div className="st-heading">Вкладки острова</div>
+      <div className="st-card">
+        {TABS.map((tab) => {
+          const always = tab.id === "launcher";
+          const on = always || !settings.hiddenTabs.includes(tab.id);
+          return (
+            <Row
+              key={tab.id}
+              title={tab.label}
+              hint={always ? `Всегда включён: открывается по ${formatShortcut(settings.hotkeys.launcher)}` : TAB_HINTS[tab.id]}
+            >
+              <Toggle
+                on={on}
+                disabled={always}
+                onChange={(show) =>
+                  updateSettings({
+                    hiddenTabs: show
+                      ? settings.hiddenTabs.filter((id) => id !== tab.id)
+                      : [...settings.hiddenTabs, tab.id],
+                  })
+                }
+              />
+            </Row>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+const TAB_HINTS: Partial<Record<TabId, string>> = {
+  media: "Трек, обложка и управление музыкой",
+  weather: "Прогноз и температура в свёрнутом острове",
+  shelf: "Файлы, перетащенные на остров",
+  clipboard: "История копирования",
+};
+
+interface Browser {
+  id: string;
+  name: string;
+}
+
+function BrowserRow({ chosen }: { chosen: string | null }) {
+  const [browsers, setBrowsers] = useState<{ all: Browser[]; auto: Browser | null }>({ all: [], auto: null });
+  useEffect(() => {
+    if (isTauri) invoke<{ all: Browser[]; auto: Browser | null }>("browser_list").then(setBrowsers);
+  }, []);
+  const missing = chosen && chosen !== "system" && !browsers.all.some((b) => b.id === chosen);
+
+  return (
+    <Row title="Браузер" hint="Для поиска в интернете и ссылок из лаунчера">
+      <select
+        className="st-select"
+        value={chosen ?? ""}
+        onChange={(e) => updateSettings({ browser: e.target.value || null })}
+      >
+        <option value="">
+          {browsers.auto ? `Автоматически · ${browsers.auto.name}` : "Автоматически"}
+        </option>
+        <option value="system">Браузер Windows по умолчанию</option>
+        {missing && <option value={chosen ?? ""}>Не найден</option>}
+        {browsers.all.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+    </Row>
+  );
+}
+
+/** Autostart state, live with the tray toggle; null when it can't be changed. */
+function useAutostart(): boolean | null {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!isTauri) return;
+    invoke<boolean | null>("settings_autostart").then(setOn);
+    const unlisten = listen<boolean>("lumen://autostart", (e) => setOn(e.payload));
+    return () => {
+      unlisten.then((off) => off());
+    };
+  }, []);
+  return on;
+}
+
+/* Клавиши */
+
+function KeysSection({ hotkeys }: { hotkeys: Hotkeys }) {
+  const busy = useBusyHotkeys();
+  const isDefault = HOTKEY_ROWS.every((r) => hotkeys[r.id] === DEFAULT_SETTINGS.hotkeys[r.id]);
+
+  return (
+    <>
+      <div className="st-card">
+        {HOTKEY_ROWS.map((row) => (
+          <HotkeyRow key={row.id} row={row} hotkeys={hotkeys} busy={busy.includes(row.id)} />
+        ))}
+      </div>
+      <div className="st-footnote">
+        Нажми на сочетание и набери новое. Esc — отмена.{" "}
+        {!isDefault && (
+          <button className="st-link" onClick={() => updateSettings({ hotkeys: DEFAULT_SETTINGS.hotkeys })}>
+            Вернуть стандартные
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function HotkeyRow({ row, hotkeys, busy }: { row: (typeof HOTKEY_ROWS)[number]; hotkeys: Hotkeys; busy: boolean }) {
+  const [recording, setRecording] = useState(false);
+  const [held, setHeld] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
+
+  // While recording, Lumen lets go of its own shortcuts so they can be pressed here.
+  useEffect(() => {
+    if (!recording || !isTauri) return;
+    invoke("hotkeys_suspend", { suspended: true });
+    return () => {
+      invoke("hotkeys_suspend", { suspended: false });
+    };
+  }, [recording]);
+
+  const stop = () => {
+    setRecording(false);
+    setHeld([]);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!recording) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.code === "Escape" && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+      stop();
+      button.current?.blur();
+      return;
+    }
+    setHeld(heldModifiers(e));
+    const shortcut = shortcutFromEvent(e);
+    if (!shortcut) return;
+    if (!shortcut.includes("+")) {
+      setError("Добавь Ctrl, Alt, Shift или Win");
+      return;
+    }
+    const taken = HOTKEY_ROWS.find((r) => r.id !== row.id && hotkeys[r.id] === shortcut);
+    if (taken) {
+      setError(`Уже занято: ${taken.title.toLowerCase()}`);
+      return;
+    }
+    stop();
+    button.current?.blur();
+    updateSettings({ hotkeys: { [row.id]: shortcut } }).then(
+      () => setError(null),
+      (err) => setError(String(err)),
+    );
+  };
+
+  const parts = recording ? held : shortcutParts(hotkeys[row.id]);
+
+  return (
+    <Row
+      title={row.title}
+      hint={
+        error ? (
+          <span className="st-error">{error}</span>
+        ) : busy ? (
+          <span className="st-warn">Занято другим приложением — Lumen подхватит, когда освободится</span>
+        ) : (
+          row.hint
+        )
+      }
+    >
+      <button
+        ref={button}
+        className={`st-hotkey${recording ? " recording" : ""}`}
+        onClick={() => {
+          setError(null);
+          setRecording(true);
+        }}
+        onBlur={stop}
+        onKeyDown={onKeyDown}
+        onKeyUp={(e) => recording && setHeld(heldModifiers(e))}
+      >
+        {parts.map((p) => (
+          <kbd key={p}>{p}</kbd>
+        ))}
+        {recording && <span className="st-hotkey-prompt">{held.length ? "…" : "Нажми сочетание"}</span>}
+      </button>
+    </Row>
+  );
+}
+
+/** Actions whose shortcut another app holds, refreshed as registrations change. */
+function useBusyHotkeys(): Action[] {
+  const [busy, setBusy] = useState<Action[]>([]);
+  useEffect(() => {
+    if (!isTauri) return;
+    const load = () => invoke<Action[]>("hotkeys_busy").then(setBusy);
+    load();
+    const unlisten = listen("lumen://hotkeys", load);
+    return () => {
+      unlisten.then((off) => off());
+    };
+  }, []);
+  return busy;
+}
+
+/* Погода */
+
+const REFRESH = [10, 15, 30, 60];
+
+function WeatherSection({ settings }: { settings: Settings }) {
+  const { city, weather } = settings;
+  const [picking, setPicking] = useState(!city);
+  const [query, setQuery] = useState("");
+  const results = useCitySearch(query);
+
+  const pick = (c: City | null) => {
+    setCity(c);
+    setQuery("");
+    setPicking(!c);
+  };
+
+  return (
+    <>
+      {city && !picking ? (
+        <div className="st-card">
+          <Row title={city.name} hint={city.area}>
+            <div className="st-buttons">
+              <button className="st-button" onClick={() => setPicking(true)}>
+                Сменить
+              </button>
+              <button className="st-button quiet" onClick={() => pick(null)}>
+                Убрать
+              </button>
+            </div>
+          </Row>
+        </div>
+      ) : (
+        <div className="st-card st-city-search">
+          <label className="st-input">
+            <svg viewBox="0 0 24 24" aria-hidden>
+              <path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />
+            </svg>
+            <input
+              autoFocus
+              value={query}
+              placeholder="Город, например Казань"
+              spellCheck={false}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && results[0]) pick(results[0]);
+                if (e.key === "Escape" && city) setPicking(false);
+              }}
+            />
+          </label>
+          {results.length > 0 && (
+            <ul className="st-results">
+              {results.map((c) => (
+                <li key={`${c.latitude},${c.longitude}`}>
+                  <button onClick={() => pick(c)}>
+                    <span>{c.name}</span>
+                    <span className="st-row-hint">{c.area}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      <Heading>Прогноз</Heading>
+      <div className="st-card">
+        <Row title="Единицы">
+          <Segmented
+            value={weather.units}
+            options={[
+              { value: "c", label: "°C" },
+              { value: "f", label: "°F" },
+            ]}
+            onChange={(units) => updateSettings({ weather: { units } })}
+          />
+        </Row>
+        <Row title="Предупреждать о дожде" hint="Если вероятность в ближайший час не ниже">
+          <Slider
+            value={weather.rainChance}
+            min={30}
+            max={90}
+            step={5}
+            format={(v) => `${v}%`}
+            onChange={(rainChance) => updateSettings({ weather: { rainChance } })}
+          />
+        </Row>
+        <Row title="Обновлять">
+          <select
+            className="st-select"
+            value={weather.refreshMinutes}
+            onChange={(e) => updateSettings({ weather: { refreshMinutes: Number(e.target.value) } })}
+          >
+            {REFRESH.map((m) => (
+              <option key={m} value={m}>
+                {`раз в ${m} мин`}
+              </option>
+            ))}
+          </select>
+        </Row>
+      </div>
+      <div className="st-footnote">
+        Прогноз от <button className="st-link" onClick={() => open("https://open-meteo.com")}>Open-Meteo</button>.
+      </div>
+    </>
+  );
+}
+
+/* О Lumen */
+
+function AboutSection() {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (isTauri) getVersion().then(setVersion);
+  }, []);
+
+  return (
+    <div className="st-about">
+      <div className="island st-about-logo">
+        <span className="orb" />
+      </div>
+      <div className="st-about-name">Lumen</div>
+      <div className="st-row-hint">{version ? `Версия ${version}` : "Версия для разработки"}</div>
+      <p className="st-about-text">Живой остров в верхней части рабочего стола Windows.</p>
+      <div className="st-buttons">
+        <button className="st-button" onClick={() => open(`${REPO_URL}/releases/latest`)}>
+          Последний релиз
+        </button>
+        <button className="st-button quiet" onClick={() => open(REPO_URL)}>
+          GitHub
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const open = (url: string) => (isTauri ? openUrl(url) : window.open(url, "_blank"));

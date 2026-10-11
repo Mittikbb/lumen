@@ -41,6 +41,15 @@ const POLL: Duration = Duration::from_millis(500);
 /// Offset between the Windows FILETIME epoch (1601) and the Unix epoch, in 100 ns ticks.
 const FILETIME_UNIX_OFFSET: i64 = 116_444_736_000_000_000;
 
+/// Title, artist and player of the track that's playing right now.
+pub fn playing_track(app: &AppHandle) -> Option<(String, String, String)> {
+    let state = app.state::<MediaState>();
+    let now = state.0.lock().unwrap();
+    now.as_ref()
+        .filter(|n| n.playing)
+        .map(|n| (n.title.clone(), n.artist.clone(), n.app.clone()))
+}
+
 #[tauri::command]
 pub fn media_state(state: State<MediaState>) -> Option<NowPlaying> {
     state.0.lock().unwrap().clone()

@@ -33,25 +33,30 @@ export function useLauncherOpen(): boolean {
   return open;
 }
 
-/** Installed apps and the preferred AI app, refreshed when the backend reloads them. */
-export function useApps(): { apps: App[]; ai: App | null } {
+/**
+ * Installed apps, the known AI apps among them and the one to open, refreshed
+ * when the backend reloads the list or the AI app is changed in settings.
+ */
+export function useApps(): { apps: App[]; ai: App | null; aiApps: App[] } {
   const [apps, setApps] = useState<App[]>([]);
   const [ai, setAi] = useState<App | null>(null);
+  const [aiApps, setAiApps] = useState<App[]>([]);
 
   useEffect(() => {
     if (!isTauri) return;
     const load = () => {
       invoke<App[]>("launcher_apps").then(setApps);
       invoke<App | null>("launcher_ai_app").then(setAi);
+      invoke<App[]>("launcher_ai_apps").then(setAiApps);
     };
     load();
-    const unlisten = listen("lumen://apps", load);
+    const unlisten = [listen("lumen://apps", load), listen("lumen://settings", load)];
     return () => {
-      unlisten.then((off) => off());
+      unlisten.forEach((u) => u.then((off) => off()));
     };
   }, []);
 
-  return { apps, ai };
+  return { apps, ai, aiApps };
 }
 
 /** Icons already fetched this session (null = the app has none). */

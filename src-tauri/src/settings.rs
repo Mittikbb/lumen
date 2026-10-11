@@ -1,0 +1,320 @@
+//! User settings: hotkeys, apps, the island's shape, look and behaviour, module
+//! limits and Discord. Stored as settings.json next to the shelf and clipboard
+//! history; every change is broadcast to all windows as `lumen://settings`.
+//!
+//! Only what the backend acts on is typed here. Preferences only the frontend
+//! reads (island size, motion, clock, weather units...) pass through as-is.
+//!
+//! The settings window is a regular, focusable window, but like every Lumen
+//! window it's created hidden and non-activating and only made focusable once
+//! shown, so shell mods that restyle new windows leave it alone.
+
+use std::{fs, path::PathBuf, sync::Mutex};
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use tauri::{
+    AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    WindowEvent, window::Color,
+};
+
+use crate::{discord, hotkeys, overlay, tray};
+
+const WINDOW: &str = "settings";
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Settings {
+    pub hotkeys: Hotkeys,
+    /// Start menu AppID of the AI app; `None` picks the first one installed.
+    pub ai_app: Option<String>,
+    /// Browser for web links: a StartMenuInternet key, "system" for the
+    /// Windows default, or `None` for Chrome when it's installed.
+    pub browser: Option<String>,
+    /// Island tabs the user switched off (search always stays).
+    pub hidden_tabs: Vec<String>,
+    pub city: Option<City>,
+    pub look: Look,
+    pub display: Display,
+    pub clipboard: ClipboardPrefs,
+    pub shelf: ShelfPrefs,
+    pub discord: DiscordPrefs,
+    /// Frontend-only groups, kept untouched.
+    #[serde(flatten)]
+    pub rest: Map<String, Value>,
+}
+
+/// Where the island lives.
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Display {
+    /// Monitor name; `None` for the primary one.
+    pub monitor: Option<String>,
+    /// Hide while a fullscreen app (game, video) is in front.
+    pub hide_fullscreen: bool,
+}
+
+impl Default for Display {
+    fn default() -> Self {
+        Self {
+            monitor: None,
+            hide_fullscreen: true,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ClipboardPrefs {
+    /// Entries kept, pinned ones aside.
+    pub limit: usize,
+    /// Unpinned entries older than this many days are dropped; 0 keeps them.
+    pub keep_days: u64,
+    /// Executables (e.g. "keepass") whose copies aren't remembered.
+    pub ignore: Vec<String>,
+}
+
+impl Default for ClipboardPrefs {
+    fn default() -> Self {
+        Self {
+            limit: 60,
+            keep_days: 0,
+            ignore: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ShelfPrefs {
+    pub limit: usize,
+}
+
+impl Default for ShelfPrefs {
+    fn default() -> Self {
+        Self { limit: 40 }
+    }
+}
+
+/// The user's own Discord application, needed for the local RPC connection.
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DiscordPrefs {
+    pub enabled: bool,
+    pub client_id: String,
+    pub client_secret: String,
+    /// Show the voice channel on the island.
+    pub voice: bool,
+    /// Show what's playing as the Discord status.
+    pub presence: bool,
+}
+
+impl Default for DiscordPrefs {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            client_id: String::new(),
+            client_secret: String::new(),
+            voice: true,
+            presence: true,
+        }
+    }
+}
+
+/// Shortcuts as `Alt+Shift+KeyS`: modifiers plus a W3C key code.
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Hotkeys {
+    pub launcher: String,
+    pub screenshot: String,
+    pub text: String,
+}
+
+impl Default for Hotkeys {
+    fn default() -> Self {
+        Self {
+            launcher: "Alt+Space".into(),
+            screenshot: "Alt+Shift+KeyS".into(),
+            text: "Alt+Shift+KeyT".into(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct City {
+    name: String,
+    area: String,
+    latitude: f64,
+    longitude: f64,
+}
+
+/// The island's look; values are interpreted by the frontend.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Look {
+    /// "off", "soft", "normal" or "bright".
+    glow: String,
+    /// Glow palette when there's no album art to take colours from.
+    accent: String,
+    /// Tint the glow with the album art of the playing track.
+    art_colors: bool,
+    /// Pulse with the music instead of breathing at a fixed pace.
+    beat: bool,
+    /// Stretch toward an approaching pointer.
+    lean: bool,
+}
+
+impl Default for Look {
+    fn default() -> Self {
+        Self {
+            glow: "normal".into(),
+            accent: "sunset".into(),
+            art_colors: true,
+            beat: true,
+            lean: true,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Store {
+    settings: Mutex<Settings>,
+    file: Mutex<Option<PathBuf>>,
+}
+
+/// Loads settings.json; call before anything reads the settings.
+pub fn init(app: &AppHandle) {
+    let store = app.state::<Store>();
+    let Ok(dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let _ = fs::create_dir_all(&dir);
+    let path = dir.join("settings.json");
+    if let Some(saved) = fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
+    {
+        *store.settings.lock().unwrap() = saved;
+    }
+    *store.file.lock().unwrap() = Some(path);
+}
+
+pub fn get(app: &AppHandle) -> Settings {
+    app.state::<Store>().settings.lock().unwrap().clone()
+}
+
+#[tauri::command]
+pub fn settings_get(store: State<Store>) -> Settings {
+    store.settings.lock().unwrap().clone()
+}
+
+/// Merges `patch` (any subset of the settings, `null` resets a field) into the
+/// current settings, applies and saves them.
+#[tauri::command]
+pub fn settings_update(app: AppHandle, patch: Value) -> Result<Settings, String> {
+    let store = app.state::<Store>();
+    let (prev, next) = {
+        let mut current = store.settings.lock().unwrap();
+        let mut value = serde_json::to_value(&*current).map_err(|e| e.to_string())?;
+        merge(&mut value, patch);
+        let next: Settings = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        if next.hotkeys != current.hotkeys {
+            hotkeys::parse(&next.hotkeys)?;
+        }
+        (std::mem::replace(&mut *current, next.clone()), next)
+    };
+
+    if let Some(path) = store.file.lock().unwrap().as_ref() {
+        if let Ok(json) = serde_json::to_string_pretty(&next) {
+            let _ = fs::write(path, json);
+        }
+    }
+    if next.hotkeys != prev.hotkeys {
+        hotkeys::apply(&app, &next.hotkeys)?;
+    }
+    // Clipboard and shelf limits apply on the next addition, so dragging a
+    // slider down and back up never throws entries away.
+    if next.display.monitor != prev.display.monitor {
+        overlay::redock(&app);
+    }
+    if next.discord != prev.discord {
+        discord::restart(&app);
+    }
+    let _ = app.emit("lumen://settings", &next);
+    Ok(next)
+}
+
+/// Autostart state; `None` in dev builds, where it can't be changed.
+#[tauri::command]
+pub fn settings_autostart(app: AppHandle) -> Option<bool> {
+    tray::autostart(&app)
+}
+
+#[tauri::command]
+pub fn settings_set_autostart(app: AppHandle, on: bool) -> Option<bool> {
+    tray::set_autostart(&app, on)
+}
+
+/// Async on purpose: a sync command runs inside the webview's IPC callback,
+/// and creating another webview from there deadlocks on Windows.
+#[tauri::command]
+pub async fn settings_open(app: AppHandle) -> Result<(), String> {
+    open(&app).map_err(|e| e.to_string())
+}
+
+/// Shows the settings window, or brings it forward if it's already open.
+pub fn open(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window(WINDOW) {
+        window.unminimize()?;
+        window.show()?;
+        return bring_forward(&window);
+    }
+
+    let window = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App("index.html".into()))
+        .title("Настройки Lumen")
+        .inner_size(820.0, 620.0)
+        .resizable(false)
+        .maximizable(false)
+        .decorations(false)
+        .shadow(true)
+        // Matches the page background, so there's no white flash on open.
+        .background_color(Color(11, 11, 14, 255))
+        .center()
+        .focusable(false)
+        .visible(false)
+        .build()?;
+
+    // Closing the window mid-recording must not leave the hotkeys switched off.
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::Destroyed = event {
+            hotkeys::suspend(&handle, false);
+        }
+    });
+
+    window.show()?;
+    window.set_focusable(true)?;
+    bring_forward(&window)
+}
+
+/// Raises the window above the others even when Windows refuses to hand it
+/// focus (a click on the non-activating island doesn't make Lumen the
+/// foreground app), then asks for focus.
+fn bring_forward(window: &WebviewWindow) -> tauri::Result<()> {
+    window.set_always_on_top(true)?;
+    window.set_always_on_top(false)?;
+    window.set_focus()
+}
+
+/// JSON merge: objects are merged key by key, everything else is replaced.
+fn merge(target: &mut Value, patch: Value) {
+    match (target, patch) {
+        (Value::Object(target), Value::Object(patch)) => {
+            for (key, value) in patch {
+                merge(target.entry(key).or_insert(Value::Null), value);
+            }
+        }
+        (target, patch) => *target = patch,
+    }
+}

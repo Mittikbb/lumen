@@ -16,9 +16,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_opener::OpenerExt;
 
-use crate::{clipboard::win as clipboard, overlay, shell_image};
+use crate::{browser, clipboard::win as clipboard, overlay, settings, shell_image};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The app list is refreshed on open when older than this.
@@ -75,14 +74,30 @@ pub fn launcher_apps(launcher: State<Launcher>) -> Vec<App> {
     launcher.apps.lock().unwrap().clone()
 }
 
-/// Name of the preferred installed AI app, if any.
+/// The AI app to open: the one picked in settings if it's still installed,
+/// otherwise the first known one.
 #[tauri::command]
-pub fn launcher_ai_app(launcher: State<Launcher>) -> Option<App> {
+pub fn launcher_ai_app(app: AppHandle) -> Option<App> {
+    let chosen = settings::get(&app).ai_app;
+    let launcher = app.state::<Launcher>();
     let apps = launcher.apps.lock().unwrap();
+    chosen
+        .and_then(|id| apps.iter().find(|a| a.id == id).cloned())
+        .or_else(|| known_ai_apps(&apps).into_iter().next())
+}
+
+/// Installed AI apps Lumen knows about, in order of preference.
+#[tauri::command]
+pub fn launcher_ai_apps(launcher: State<Launcher>) -> Vec<App> {
+    known_ai_apps(&launcher.apps.lock().unwrap())
+}
+
+fn known_ai_apps(apps: &[App]) -> Vec<App> {
     AI_APPS
         .iter()
-        .find_map(|name| apps.iter().find(|a| a.name.starts_with(name)))
+        .filter_map(|name| apps.iter().find(|a| a.name.starts_with(name)))
         .cloned()
+        .collect()
 }
 
 /// Icon for an app, from cache or extracted on a worker thread.
@@ -120,12 +135,7 @@ pub fn launcher_open_url(app: AppHandle, url: String) -> Result<(), String> {
         return Err("only web links are allowed".into());
     }
     close(&app, false);
-    // Prefer Chrome; fall back to the default browser if it isn't installed.
-    let opener = app.opener();
-    opener
-        .open_url(&url, Some("chrome"))
-        .or_else(|_| opener.open_url(&url, None::<&str>))
-        .map_err(|e| e.to_string())
+    browser::open_url(&app, &url)
 }
 
 #[tauri::command]

@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../island/env";
 import { condition } from "./conditions";
-import { City, Day, Forecast, searchCities } from "./useWeather";
+import { City, Day, Forecast, useCitySearch } from "./useWeather";
 import { WeatherIcon } from "./WeatherIcon";
 
-const SEARCH_DEBOUNCE_MS = 300;
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
 // Typing needs the normally non-activating window to take keyboard focus.
@@ -90,7 +89,7 @@ function DayRow({ day, today, weekMin, weekMax }: { day: Day; today: boolean; we
 
 function CityPicker({ onPick, onCancel }: { onPick: (city: City) => void; onCancel?: () => void }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<City[]>([]);
+  const results = useCitySearch(query);
   const [selected, setSelected] = useState(0);
   const input = useRef<HTMLInputElement>(null);
 
@@ -103,23 +102,7 @@ function CityPicker({ onPick, onCancel }: { onPick: (city: City) => void; onCanc
     };
   }, []);
 
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
-    let alive = true;
-    const t = setTimeout(() => {
-      searchCities(q)
-        .then((r) => alive && (setResults(r), setSelected(0)))
-        .catch(() => alive && setResults([]));
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
-  }, [query]);
+  useEffect(() => setSelected(0), [results]);
 
   const pick = (city: City) => {
     releaseFocus(true);

@@ -6,11 +6,17 @@
 use std::{sync::Mutex, thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, State, WebviewWindow};
 use windows::Win32::{
-    Foundation::HWND,
-    UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow},
+    Foundation::{HWND, RECT},
+    Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
+    UI::WindowsAndMessaging::{
+        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId,
+        SetForegroundWindow,
+    },
 };
+
+use crate::settings;
 
 /// Island bounds in CSS pixels relative to the window, reported by the frontend.
 #[derive(Clone, Copy, Default, Deserialize)]
@@ -98,14 +104,70 @@ pub fn overlay_release_focus(app: AppHandle, restore_focus: bool) {
     release_focus(&app, restore_focus);
 }
 
-pub fn dock_to_top(window: &WebviewWindow) -> tauri::Result<()> {
-    let Some(monitor) = window.primary_monitor()? else {
+#[derive(Serialize)]
+pub struct MonitorInfo {
+    name: String,
+    width: u32,
+    height: u32,
+    primary: bool,
+}
+
+/// Monitors to choose from in settings.
+#[tauri::command]
+pub fn overlay_monitors(app: AppHandle) -> Vec<MonitorInfo> {
+    let primary = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .and_then(|m| m.name().cloned());
+    app.available_monitors()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|m| {
+            let name = m.name()?.clone();
+            Some(MonitorInfo {
+                primary: primary.as_ref() == Some(&name),
+                width: m.size().width,
+                height: m.size().height,
+                name,
+            })
+        })
+        .collect()
+}
+
+/// The monitor picked in settings, falling back to the primary one.
+fn target_monitor(window: &WebviewWindow) -> tauri::Result<Option<Monitor>> {
+    let wanted = settings::get(window.app_handle()).display.monitor;
+    let chosen = wanted.and_then(|name| {
+        window
+            .available_monitors()
+            .ok()?
+            .into_iter()
+            .find(|m| m.name() == Some(&name))
+    });
+    Ok(chosen.or(window.primary_monitor()?))
+}
+
+/// Centres the island window along the top edge of its monitor.
+fn place(window: &WebviewWindow) -> tauri::Result<()> {
+    let Some(monitor) = target_monitor(window)? else {
         return Ok(());
     };
     let size = window.outer_size()?;
     let area = monitor.position();
     let x = area.x + (monitor.size().width as i32 - size.width as i32) / 2;
-    window.set_position(PhysicalPosition::new(x, area.y))?;
+    window.set_position(PhysicalPosition::new(x, area.y))
+}
+
+/// Moves the island after the monitor setting changed.
+pub fn redock(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = place(&window);
+    }
+}
+
+pub fn dock_to_top(window: &WebviewWindow) -> tauri::Result<()> {
+    place(window)?;
     window.set_ignore_cursor_events(true)?;
     // The window is created hidden and non-focusable (WS_EX_NOACTIVATE), and is
     // only shown once styled and in place. Shell mods that restyle every new
@@ -158,4 +220,76 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
             was_near = near;
         }
     });
+}
+
+/// Hides the island while a fullscreen app (a game, a video) is in front on
+/// its monitor, if the setting allows, and brings it back afterwards.
+pub fn spawn_fullscreen_watch(app: AppHandle) {
+    thread::spawn(move || {
+        let mut hidden = false;
+        loop {
+            thread::sleep(Duration::from_millis(500));
+            let Some(window) = app.get_webview_window("main") else {
+                continue;
+            };
+            let Ok(hwnd) = window.hwnd() else {
+                continue;
+            };
+            let hide =
+                settings::get(&app).display.hide_fullscreen && fullscreen_in_front(HWND(hwnd.0));
+            if hide != hidden {
+                let _ = if hide { window.hide() } else { window.show() };
+                hidden = hide;
+            }
+        }
+    });
+}
+
+/// Whether another app's window fills the whole monitor the island is on.
+fn fullscreen_in_front(island: HWND) -> bool {
+    unsafe {
+        let front = GetForegroundWindow();
+        if front.is_invalid() {
+            return false;
+        }
+        let mut pid = 0;
+        GetWindowThreadProcessId(front, Some(&mut pid));
+        if pid == std::process::id() {
+            return false;
+        }
+        // The desktop and taskbar cover the screen too, but aren't "fullscreen".
+        let mut class = [0u16; 64];
+        let len = GetClassNameW(front, &mut class) as usize;
+        let class = String::from_utf16_lossy(&class[..len]);
+        if [
+            "Progman",
+            "WorkerW",
+            "Shell_TrayWnd",
+            "Shell_SecondaryTrayWnd",
+        ]
+        .contains(&class.as_str())
+        {
+            return false;
+        }
+
+        let monitor = MonitorFromWindow(front, MONITOR_DEFAULTTONEAREST);
+        if monitor != MonitorFromWindow(island, MONITOR_DEFAULTTONEAREST) {
+            return false;
+        }
+        let mut info = MONITORINFO {
+            cbSize: size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        let mut rect = RECT::default();
+        if !GetMonitorInfoW(monitor, &mut info).as_bool()
+            || GetWindowRect(front, &mut rect).is_err()
+        {
+            return false;
+        }
+        let screen = info.rcMonitor;
+        rect.left <= screen.left
+            && rect.top <= screen.top
+            && rect.right >= screen.right
+            && rect.bottom >= screen.bottom
+    }
 }

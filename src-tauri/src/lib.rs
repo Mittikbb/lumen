@@ -1,11 +1,14 @@
 mod audio;
+mod browser;
 mod capture;
 mod clipboard;
+mod discord;
 mod hotkeys;
 mod launcher;
 mod media;
 mod overlay;
 mod pixels;
+mod settings;
 mod shelf;
 mod shell_image;
 mod tray;
@@ -15,8 +18,11 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // Must be registered first: a second launch just exits.
-        .plugin(tauri_plugin_single_instance::init(|_, _, _| {}))
+        // Must be registered first: a second launch (e.g. from the Start menu)
+        // exits and opens the settings in the running instance instead.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            let _ = settings::open(app);
+        }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(overlay::HitRegion::default())
@@ -26,10 +32,14 @@ pub fn run() {
         .manage(launcher::Launcher::default())
         .manage(shelf::Shelf::default())
         .manage(capture::Capture::default())
+        .manage(settings::Store::default())
+        .manage(hotkeys::Bindings::default())
+        .manage(discord::Discord::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
             overlay::overlay_release_focus,
+            overlay::overlay_monitors,
             media::media_state,
             media::media_control,
             clipboard::clipboard_history,
@@ -41,6 +51,7 @@ pub fn run() {
             launcher::launcher_close,
             launcher::launcher_apps,
             launcher::launcher_ai_app,
+            launcher::launcher_ai_apps,
             launcher::launcher_icon,
             launcher::launcher_run,
             launcher::launcher_open_url,
@@ -58,14 +69,27 @@ pub fn run() {
             capture::capture_mode,
             capture::capture_cancel,
             capture::capture_finish,
+            settings::settings_get,
+            settings::settings_update,
+            settings::settings_autostart,
+            settings::settings_set_autostart,
+            settings::settings_open,
+            browser::browser_list,
+            discord::discord_status,
+            discord::discord_voice,
+            discord::discord_forget,
+            hotkeys::hotkeys_suspend,
+            hotkeys::hotkeys_busy,
         ])
         .setup(|app| {
             let window = app
                 .get_webview_window("main")
                 .expect("main window is missing");
 
+            settings::init(app.handle());
             overlay::dock_to_top(&window)?;
             overlay::spawn_cursor_tracker(app.handle().clone());
+            overlay::spawn_fullscreen_watch(app.handle().clone());
             media::spawn_watcher(app.handle().clone());
             audio::spawn_analyser(app.handle().clone());
             clipboard::spawn_watcher(app.handle().clone());
@@ -73,6 +97,7 @@ pub fn run() {
             hotkeys::init(app.handle())?;
             shelf::init(app.handle());
             tray::init(app.handle())?;
+            discord::init(app.handle());
 
             Ok(())
         })

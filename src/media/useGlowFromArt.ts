@@ -1,18 +1,16 @@
 import { useEffect } from "react";
 
-const DEFAULT_A = "rgb(247, 178, 103)";
-const DEFAULT_B = "rgb(242, 92, 84)";
-
 /**
- * Tints the island glow with the most vivid colour of the album art.
- * The two glow variables are registered with @property, so the change fades.
+ * Tints the island glow with the most vivid colour of the album art, or the
+ * `fallback` pair without one. The two glow variables are registered with
+ * @property, so the change fades.
  */
-export function useGlowFromArt(art: string | null | undefined) {
+export function useGlowFromArt(art: string | null | undefined, fallback: { a: string; b: string }) {
   useEffect(() => {
     const root = document.documentElement.style;
     if (!art) {
-      root.setProperty("--glow-a", DEFAULT_A);
-      root.setProperty("--glow-b", DEFAULT_B);
+      root.setProperty("--glow-a", fallback.a);
+      root.setProperty("--glow-b", fallback.b);
       return;
     }
 
@@ -28,7 +26,7 @@ export function useGlowFromArt(art: string | null | undefined) {
     return () => {
       cancelled = true;
     };
-  }, [art]);
+  }, [art, fallback]);
 }
 
 function vividColors(img: HTMLImageElement): [string, string] {

@@ -97,8 +97,13 @@ pub fn spawn_analyser(app: AppHandle) {
         loop {
             // (Re)open the capture on the current default output device. Runs again
             // whenever the device changes (headphones plugged in) or the stream dies.
-            if let Err(e) = run_capture(&app) {
-                eprintln!("audio capture: {e}");
+            // Each attempt gets a fresh thread: a capture that died can leave COM on
+            // its thread unusable, and every reopen there then fails.
+            let handle = app.clone();
+            match thread::spawn(move || run_capture(&handle)).join() {
+                Ok(Err(e)) => eprintln!("audio capture: {e}"),
+                Err(_) => eprintln!("audio capture: thread panicked"),
+                Ok(Ok(())) => {}
             }
             let _ = app.emit(
                 "lumen://audio",
@@ -114,8 +119,16 @@ pub fn spawn_analyser(app: AppHandle) {
 
 fn run_capture(app: &AppHandle) -> Result<(), String> {
     let host = cpal::default_host();
-    let device = host.default_output_device().ok_or("no output device")?;
-    let device_id = device.id().map_err(|e| e.to_string())?;
+    let default = host.default_output_device().ok_or("no output device")?;
+    let device_id = default.id().map_err(|e| e.to_string())?;
+    // Open the actual endpoint rather than cpal's "follow the default" device: its
+    // async activation can start failing for good, while plain activation keeps
+    // working. Device changes are caught by the check below anyway.
+    let device = host
+        .output_devices()
+        .ok()
+        .and_then(|mut all| all.find(|d| d.id().ok().as_ref() == Some(&device_id)))
+        .unwrap_or(default);
     let supported = device.default_output_config().map_err(|e| e.to_string())?;
     let config = supported.config();
     let channels = config.channels.max(1) as usize;
