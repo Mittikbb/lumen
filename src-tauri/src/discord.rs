@@ -28,7 +28,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use windows::Win32::{Foundation::HANDLE, System::Pipes::PeekNamedPipe};
 
 use crate::{
-    media,
+    media, net,
     settings::{self, DiscordPrefs},
 };
 
@@ -417,16 +417,20 @@ impl Session<'_> {
                         "authorize",
                         Some("Подтверди доступ в окне Discord".into()),
                     );
-                    let code = self.request(
-                        "AUTHORIZE",
-                        // Discord's OAuth wants the redirect here too, not only when
-                        // the code is exchanged.
-                        json!({
-                            "client_id": self.prefs.client_id.trim(),
-                            "scopes": SCOPES,
-                            "redirect_uri": REDIRECT_URI,
-                        }),
-                    )?;
+                    // No redirect here: RPC refuses one. Discord takes the redirect
+                    // registered on the app, so it must have exactly one.
+                    let code = self
+                        .request(
+                            "AUTHORIZE",
+                            json!({ "client_id": self.prefs.client_id.trim(), "scopes": SCOPES }),
+                        )
+                        .map_err(|e| {
+                            if e.contains("redirect_uri") {
+                                format!("В Developer Portal → OAuth2 → Redirects должен быть ровно один адрес {REDIRECT_URI} — добавь его и нажми Save Changes")
+                            } else {
+                                e
+                            }
+                        })?;
                     let code = code["code"]
                         .as_str()
                         .ok_or("Discord не выдал код доступа")?;
@@ -687,7 +691,7 @@ fn token_request(prefs: &DiscordPrefs, fields: &[(&str, &str)]) -> Result<Token,
         ("client_secret", prefs.client_secret.trim()),
     ];
     form.extend_from_slice(fields);
-    let reply: TokenReply = match ureq::post(TOKEN_URL).send_form(&form) {
+    let reply: TokenReply = match net::agent().post(TOKEN_URL).send_form(&form) {
         Ok(response) => response.into_json().map_err(|e| e.to_string())?,
         Err(ureq::Error::Status(code, response)) => {
             let body = response.into_string().unwrap_or_default();
