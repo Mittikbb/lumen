@@ -1408,3 +1408,21 @@ html.capture-root #root {
   width: 15px;
   height: 15px;
 }
+
+/* No track length known: a short highlight runs along the bar while playing. */
+.bar.unknown .bar-fill {
+  width: 30%;
+}
+
+.bar.live .bar-fill {
+  animation: bar-live 1.6s ease-in-out infinite;
+}
+
+@keyframes bar-live {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}

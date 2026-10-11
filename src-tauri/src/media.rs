@@ -113,7 +113,9 @@ fn read_now_playing(
     }
 
     let key = format!("{title}\u{1f}{artist}");
-    if *art_key != key {
+    // Some players (Telegram, AyuGram) attach the cover a moment after the
+    // title, so keep asking while a track has none yet.
+    if *art_key != key || art.is_none() {
         *art_key = key;
         *art = props.Thumbnail().ok().and_then(|t| read_art(&t).ok());
     }
@@ -153,14 +155,45 @@ fn read_art(
     reader.LoadAsync(size)?.join()?;
     let mut bytes = vec![0u8; size as usize];
     reader.ReadBytes(&mut bytes)?;
+    if bytes.is_empty() {
+        return Err(windows::core::Error::empty());
+    }
 
-    let mime = stream.ContentType()?.to_string();
-    let mime = if mime.is_empty() {
-        "image/png".into()
-    } else {
-        mime
-    };
+    // Trust the bytes over the declared type: Telegram reports
+    // "image/jpeg,image/jpe,image/jpg", which breaks a data URL.
+    let declared = stream.ContentType()?.to_string();
+    let mime = sniff_image(&bytes)
+        .map(String::from)
+        .or_else(|| declared.split(',').next().map(|t| t.trim().to_string()))
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| "image/png".into());
     Ok(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
+}
+
+/// Image type from the file signature.
+fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
+    match bytes {
+        [0x89, b'P', b'N', b'G', ..] => Some("image/png"),
+        [0xff, 0xd8, 0xff, ..] => Some("image/jpeg"),
+        [b'G', b'I', b'F', ..] => Some("image/gif"),
+        [
+            b'R',
+            b'I',
+            b'F',
+            b'F',
+            _,
+            _,
+            _,
+            _,
+            b'W',
+            b'E',
+            b'B',
+            b'P',
+            ..,
+        ] => Some("image/webp"),
+        [b'B', b'M', ..] => Some("image/bmp"),
+        _ => None,
+    }
 }
 
 fn now_filetime() -> i64 {

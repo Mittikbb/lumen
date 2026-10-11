@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { NowPlaying, formatTime, mediaControl, playerName, trackKey } from "./useMedia";
 
@@ -47,13 +48,20 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
           </AnimatePresence>
         </div>
 
-        {media.durationMs > 0 && (
+        {media.durationMs > 0 ? (
           <div className="media-progress">
             <span>{formatTime(media.positionMs)}</span>
             <div className="bar">
               <div className="bar-fill" style={{ width: `${progress}%` }} />
             </div>
             <span>{formatTime(media.durationMs)}</span>
+          </div>
+        ) : (
+          // Players like Telegram don't report length: show a running bar instead.
+          <div className="media-progress">
+            <div className={`bar unknown${media.playing ? " live" : ""}`}>
+              <div className="bar-fill" />
+            </div>
           </div>
         )}
 
@@ -77,9 +85,11 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
   );
 }
 
+/** Album art, or a note placeholder when there is none or it fails to load. */
 export function Art({ src, className }: { src: string | null; className: string }) {
-  return src ? (
-    <img className={className} src={src} alt="" draggable={false} />
+  const [broken, setBroken] = useState<string | null>(null);
+  return src && broken !== src ? (
+    <img className={className} src={src} alt="" draggable={false} onError={() => setBroken(src)} />
   ) : (
     <div className={`${className} art-placeholder`}>
       <svg viewBox="0 0 24 24"><path d="M9 18V6l11-2v12" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
