@@ -46,6 +46,22 @@ export interface IslandPrefs {
 
 /** How a Discord call shows while the island is collapsed. */
 export type CallStyle = "classic" | "right" | "drop";
+/** How hard it is to tear the call drop off the island. */
+export type DropPull = "soft" | "normal" | "tight";
+
+/** The Discord call on the island; all but `style` are for the drop. */
+export interface CallPrefs {
+  style: CallStyle;
+  /** What the drop announces; `self` is your own mic and sound. */
+  notify: { joins: boolean; mic: boolean; sound: boolean; self: boolean };
+  /** How long an announcement stays out, ms. */
+  showMs: number;
+  pull: DropPull;
+  /** How close the pointer comes before the drop pops out, px. */
+  reach: number;
+  /** "discord" tints the drop's glow Discord blurple. */
+  tint: "island" | "discord";
+}
 
 /** What the collapsed island shows at rest. */
 export interface CollapsedPrefs {
@@ -124,7 +140,7 @@ export interface Settings {
   look: Look;
   island: IslandPrefs;
   collapsed: CollapsedPrefs;
-  call: { style: CallStyle };
+  call: CallPrefs;
   notices: NoticePrefs;
   motion: MotionPrefs;
   display: DisplayPrefs;
@@ -159,7 +175,14 @@ export const DEFAULT_SETTINGS: Settings = {
     pull: 1,
   },
   collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true },
-  call: { style: "classic" },
+  call: {
+    style: "classic",
+    notify: { joins: true, mic: true, sound: true, self: true },
+    showMs: 2500,
+    pull: "normal",
+    reach: 120,
+    tint: "island",
+  },
   notices: { copy: true, shelf: true, rain: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
   display: { monitor: null, hideFullscreen: true, hideMaximized: false, position: null },

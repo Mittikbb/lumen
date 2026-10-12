@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useRef } from "react";
 import { MotionValue, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { HEADPHONES, HEADPHONES_OFF, MIC, MIC_OFF, icon } from "./CallPanel";
+import type { DropPull } from "../settings/useSettings";
 import type { CallEvent, CallEventKind } from "./useCallEvents";
 import type { Voice } from "./useDiscord";
 
@@ -8,15 +9,18 @@ import type { Voice } from "./useDiscord";
 const GAP = 14;
 /**
  * The neck holds until the drop is this far from the island, then snaps and
- * the drop springs back to GAP: it takes a little pull to tear it off.
+ * the drop springs back to GAP: it takes a pull to tear it off. A tighter
+ * setting stretches it further, over a longer pull.
  */
-const BREAK = 30;
+const PULLS: Record<DropPull, { breakAt: number; seconds: number }> = {
+  soft: { breakAt: 18, seconds: 0.55 },
+  normal: { breakAt: 30, seconds: 0.7 },
+  tight: { breakAt: 46, seconds: 0.85 },
+};
 /** Neck at its thickest, as a share of the drop. */
 const NECK = 0.56;
 /** How far the island's left content gets nudged while the drop squeezes out. */
 const PUSH = 7;
-/** The pointer this close to the drop's centre makes it pop out. */
-const NEAR = 120;
 /** Longest name an announcement shows before trailing off. */
 const NAME_MAX = 110;
 
@@ -34,14 +38,18 @@ export function dropGeometry(center: number, top: number, width: number, size: n
   };
 }
 
-/** Where the pointer is relative to the drop: near enough to pop it out, or on it. */
+/**
+ * Where the pointer is relative to the drop: within `reach` px of its centre
+ * to pop it out, or on it.
+ */
 export function dropHover(
   cursor: { x: number; y: number } | null,
   geometry: { cx: number; cy: number },
   size: number,
+  reach: number,
 ) {
   const distance = cursor ? Math.hypot(cursor.x - geometry.cx, cursor.y - geometry.cy) : Infinity;
-  return { near: distance < NEAR, over: distance < size / 2 + 6 };
+  return { near: distance < reach, over: distance < size / 2 + 6 };
 }
 
 /**
@@ -79,12 +87,20 @@ export function notifyWidth(size: number, event: CallEvent | null) {
 /**
  * The drop's motion, shared by all of its layers. At rest it hides inside the
  * island's left end. Popping out, it squeezes through that edge (nudging the
- * cover aside), drags a neck that thins as it stretches, tears off at BREAK
+ * cover aside), drags a neck that thins as it stretches, tears off (see PULLS)
  * and springs back to its spot; coming back the neck reforms and it melts in.
  * Announcing, it then widens to the left into a pill. It's tracked by its
  * right edge, the side facing the island, so widening never moves the neck.
  */
-export function useDropMotion(state: DropState, islandLeft: number, size: number, width: number, reduced: boolean) {
+export function useDropMotion(
+  state: DropState,
+  islandLeft: number,
+  size: number,
+  width: number,
+  pull: DropPull,
+  reduced: boolean,
+) {
+  const { breakAt, seconds } = PULLS[pull] ?? PULLS.normal;
   const restRight = islandLeft + size * 1.15;
   const outRight = islandLeft - GAP;
   const right = useMotionValue(restRight);
@@ -103,7 +119,7 @@ export function useDropMotion(state: DropState, islandLeft: number, size: number
     () =>
       right.on("change", (r) => {
         const gap = left.current - r;
-        if (attached.current && gap > BREAK) {
+        if (attached.current && gap > breakAt) {
           attached.current = false;
           animate(neck, 0, { duration: reduced ? 0 : 0.09, ease: "easeIn" }); // snap
         } else if (!attached.current && gap < 2) {
@@ -112,12 +128,12 @@ export function useDropMotion(state: DropState, islandLeft: number, size: number
         if (attached.current) {
           // Grows as the drop squeezes through the edge, thins as it stretches.
           const through = clamp01((gap + size * 0.7) / (size * 0.7));
-          const stretch = Math.sqrt(clamp01(1 - gap / BREAK));
+          const stretch = Math.sqrt(clamp01(1 - gap / breakAt));
           neck.set(size * NECK * Math.min(through, stretch));
         }
         face.set(clamp01((gap + size * 0.35) / (size * 0.45)));
       }),
-    [right, neck, face, size, reduced],
+    [right, neck, face, size, breakAt, reduced],
   );
   // The announcement's text shows as the pill opens.
   useEffect(() => w.on("change", (v) => label.set(clamp01((v - size - 12) / 30))), [w, label, size]);
@@ -131,8 +147,8 @@ export function useDropMotion(state: DropState, islandLeft: number, size: number
           attached.current && !reduced
             ? // Pulled against the neck, slowing as it stretches, then torn
               // free and bouncing back to its spot.
-              animate(right, [right.get(), islandLeft - BREAK - 2, outRight], {
-                duration: 0.7,
+              animate(right, [right.get(), islandLeft - breakAt - 2, outRight], {
+                duration: seconds,
                 times: [0, 0.68, 1],
                 ease: ["easeOut", "backOut"],
               })
@@ -149,7 +165,7 @@ export function useDropMotion(state: DropState, islandLeft: number, size: number
           animate(opacity, state === "merged" ? 0 : 1, reduced ? instant : { duration: 0.25 }),
         ];
     return () => running.forEach((a) => a.stop());
-  }, [state, islandLeft, size, width, reduced, right, w, scale, opacity, outRight, restRight]);
+  }, [state, islandLeft, size, width, breakAt, seconds, reduced, right, w, scale, opacity, outRight, restRight]);
 
   const x = useTransform(() => right.get() - w.get());
   // The cover nudged aside while the drop squeezes out, gliding back after.
@@ -190,7 +206,7 @@ const MARKS: Record<CallEventKind, { mark: ReactNode; tone: string; text: string
  * in the liquid layer, `face` shows who talks or what just happened. `solid`
  * is all in one, for reduced motion, where there is no liquid layer.
  */
-export function CallDrop({ voice, event, motion: m, top, lean, layer }: {
+export function CallDrop({ voice, event, motion: m, top, lean, layer, tint }: {
   voice: Voice;
   /** What the drop is announcing, if anything. */
   event: CallEvent | null;
@@ -199,6 +215,8 @@ export function CallDrop({ voice, event, motion: m, top, lean, layer }: {
   /** The island's lean toward the pointer; the drop sways along, keeping its gap. */
   lean: Lean;
   layer: "halo" | "fill" | "face" | "solid";
+  /** "discord" tints the drop's glow Discord blurple. */
+  tint: "island" | "discord";
 }) {
   const speaker = voice.members.find((member) => member.speaking);
   const who = event?.member ?? speaker;
@@ -207,7 +225,7 @@ export function CallDrop({ voice, event, motion: m, top, lean, layer }: {
   return (
     <motion.div className="call-drop-lean" style={{ x: lean.x, y: lean.y }} exit={{ opacity: 0 }}>
       <motion.div
-        className={`call-drop ${layer}${speaker && !event ? " speaking" : ""}`}
+        className={`call-drop ${layer}${tint === "discord" ? " discord" : ""}${speaker && !event ? " speaking" : ""}`}
         style={{
           top,
           width: m.w,

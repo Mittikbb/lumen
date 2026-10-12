@@ -175,10 +175,10 @@ export function Island() {
   const top = anchor ? anchor.y : shape.offsetTop;
   const dropCall = voice && showsTab("call") && prefs.call.style === "drop" ? voice : null;
   const drop = dropGeometry(center, top, collapsedSize.width, shape.height);
-  const dropAt = dropHover(cursor, drop, shape.height);
+  const dropAt = dropHover(cursor, drop, shape.height, prefs.call.reach);
   const onDrop = !!dropCall && !expanded && !drag.dragging && dropAt.over;
   // Joins, leaves, mic and sound changes: the drop pops out to tell.
-  const callEvent = useCallEvents(dropCall, discord.userId, !!dropCall);
+  const callEvent = useCallEvents(dropCall, discord.userId, dropCall && prefs.call);
   const dropState: DropState = expanded
     ? "merged"
     : callEvent && !drag.dragging
@@ -191,6 +191,7 @@ export function Island() {
     drop.islandLeft,
     shape.height,
     notifyWidth(shape.height, callEvent),
+    prefs.call.pull,
     moves.reduced,
   );
   const liquid = prefs.call.style === "drop" && !moves.reduced;
@@ -358,20 +359,20 @@ export function Island() {
         // (without a glow of its own, or its ring would cut the neck).
         <>
           <motion.div ref={haloRef} className={`island island-halo${glow}`} {...twin(0)} />
-          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" event={callEvent} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
           <div className="liquid">
             <LiquidFilter />
             {/* 1 px smaller: the filter grows shapes a little, which would cover the glow's ring. */}
             <motion.div className="island-ghost" {...twin(1)} />
             <AnimatePresence>
               {dropCall && <DropNeck key="neck" motion={dropMotion} top={top} islandLeft={drop.islandLeft} lean={{ x, y }} />}
-              {dropCall && <CallDrop key="drop" layer="fill" event={callEvent} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+              {dropCall && <CallDrop key="drop" layer="fill" event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
             </AnimatePresence>
           </div>
         </>
       )}
       <AnimatePresence>
-        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} event={callEvent} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
       </AnimatePresence>
       <motion.div
         ref={ref}

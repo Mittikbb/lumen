@@ -1570,6 +1570,12 @@ html.capture-root #root {
   animation: glow 3.2s ease-in-out infinite;
 }
 
+/* "Цвет: Discord" — the drop's glow in Discord blurple. */
+.call-drop.discord {
+  --glow-a: #5865f2;
+  --glow-b: #8891f2;
+}
+
 /* 1 px smaller, like .island-ghost, so the glow's ring stays visible. */
 .call-drop.fill {
   background: var(--island-bg);
