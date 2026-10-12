@@ -1,27 +1,29 @@
-use serde::{Deserialize, Serialize};
-use windows::core::{Interface, PWSTR, BOOL};
+//! Volume of the player that's playing right now, through its audio sessions
+//! in the Windows mixer. Only the player itself is touched, never the
+//! system volume: when its session can't be found the slider is hidden.
+
+use serde::Serialize;
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::Media::Audio::{
-    Endpoints::IAudioEndpointVolume,
-    eMultimedia, eRender,
-    IAudioSessionControl2, IAudioSessionManager2,
-    IMMDevice, IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator,
+    IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume,
+    MMDeviceEnumerator, eMultimedia, eRender,
 };
 use windows::Win32::System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx};
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
+use windows::core::{Interface, PWSTR};
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VolumeState {
     pub volume: f32,
     pub muted: bool,
-    pub is_app_volume: bool,
-    pub app_name: Option<String>,
 }
 
-fn get_process_name(pid: u32) -> Option<String> {
+const NOT_FOUND: &str = "у плеера нет своей громкости в микшере";
+
+fn process_name(pid: u32) -> Option<String> {
     if pid == 0 {
         return None;
     }
@@ -36,228 +38,116 @@ fn get_process_name(pid: u32) -> Option<String> {
             &mut size,
         );
         let _ = CloseHandle(handle);
-
-        if res.is_ok() && size > 0 {
-            let full_path = String::from_utf16_lossy(&buffer[..size as usize]);
-            let file_name = full_path
-                .rsplit(|c| c == '\\' || c == '/')
-                .next()
-                .unwrap_or(&full_path)
-                .to_string();
-            Some(file_name)
-        } else {
-            None
-        }
+        res.ok()?;
+        let path = String::from_utf16_lossy(&buffer[..size as usize]);
+        path.rsplit('\\').next().map(String::from)
     }
 }
 
-fn matches_app(target_app: &str, proc_name: &str) -> bool {
-    let t = target_app.to_lowercase();
-    let p = proc_name.to_lowercase();
-    if t == p {
+/// Whether a media session's app id (SMTC) and an audio session's process
+/// belong to the same player.
+fn matches_app(app: &str, process: &str) -> bool {
+    let app = app.to_lowercase();
+    let process = process.to_lowercase();
+    let app = app.strip_suffix(".exe").unwrap_or(&app);
+    let process = process.strip_suffix(".exe").unwrap_or(&process);
+    if app == process {
         return true;
     }
-    let t_stem = t.strip_suffix(".exe").unwrap_or(&t);
-    let p_stem = p.strip_suffix(".exe").unwrap_or(&p);
-    if t_stem == p_stem {
-        return true;
-    }
-    // Check Telegram / AyuGram forks
-    if (t_stem.contains("ayugram") || t_stem.contains("telegram") || t_stem.contains("telega"))
-        && (p_stem.contains("ayugram") || p_stem.contains("telegram") || p_stem.contains("telega"))
-    {
-        return true;
-    }
-    // Check Spotify
-    if t_stem.contains("spotify") && p_stem.contains("spotify") {
-        return true;
-    }
-    // Check Chrome / Edge / Firefox / Yandex
-    if t_stem.contains("chrome") && p_stem.contains("chrome") {
-        return true;
-    }
-    if t_stem.contains("yandex") && p_stem.contains("yandex") {
-        return true;
-    }
-    if t_stem.contains("msedge") && p_stem.contains("msedge") {
-        return true;
-    }
-    if t_stem.contains("firefox") && p_stem.contains("firefox") {
-        return true;
-    }
-    false
+    // Store apps and forks report ids like "SpotifyAB.SpotifyMusic_...!Spotify"
+    // or "AyuGram", so compare by family.
+    const FAMILIES: &[&[&str]] = &[
+        &["telegram", "ayugram", "telega"],
+        &["spotify"],
+        &["chrome"],
+        &["yandex"],
+        &["msedge"],
+        // Firefox's media sessions come under this app id.
+        &["firefox", "308046b0af4a39cb"],
+    ];
+    FAMILIES.iter().any(|names| {
+        names.iter().any(|n| app.contains(n)) && names.iter().any(|n| process.contains(n))
+    })
 }
 
-fn get_default_device() -> windows::core::Result<IMMDevice> {
+/// Every audio session of the player on the default output device.
+fn player_sessions(app: &str) -> windows::core::Result<Vec<ISimpleAudioVolume>> {
+    let mut found = Vec::new();
     unsafe {
+        // Runs on a worker thread; repeated calls are harmless.
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)
-    }
-}
-
-fn get_master_volume(device: &IMMDevice) -> windows::core::Result<(f32, bool)> {
-    unsafe {
-        let endpoint_vol: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
-        let level = endpoint_vol.GetMasterVolumeLevelScalar()?;
-        let mute = endpoint_vol.GetMute()?;
-        Ok((level, mute.as_bool()))
-    }
-}
-
-fn set_master_volume(device: &IMMDevice, level: f32) -> windows::core::Result<()> {
-    unsafe {
-        let endpoint_vol: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
-        endpoint_vol.SetMasterVolumeLevelScalar(level.clamp(0.0, 1.0), core::ptr::null())
-    }
-}
-
-fn set_master_mute(device: &IMMDevice, mute: bool) -> windows::core::Result<()> {
-    unsafe {
-        let endpoint_vol: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
-        endpoint_vol.SetMute(mute, core::ptr::null())
-    }
-}
-
-fn find_app_sessions(device: &IMMDevice, app: &str) -> Vec<ISimpleAudioVolume> {
-    let mut matching_volumes = Vec::new();
-    unsafe {
-        let session_manager: Result<IAudioSessionManager2, _> = device.Activate(CLSCTX_ALL, None);
-        if let Ok(manager) = session_manager {
-            if let Ok(enumerator) = manager.GetSessionEnumerator() {
-                if let Ok(count) = enumerator.GetCount() {
-                    for i in 0..count {
-                        if let Ok(control) = enumerator.GetSession(i) {
-                            if let Ok(control2) = control.cast::<IAudioSessionControl2>() {
-                                if let Ok(pid) = control2.GetProcessId() {
-                                    if let Some(proc_name) = get_process_name(pid) {
-                                        if matches_app(app, &proc_name) {
-                                            if let Ok(vol) = control.cast::<ISimpleAudioVolume>() {
-                                                matching_volumes.push(vol);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+        let device = devices.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
+        let manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
+        let sessions = manager.GetSessionEnumerator()?;
+        for i in 0..sessions.GetCount()? {
+            let Ok(control) = sessions.GetSession(i) else {
+                continue;
+            };
+            let Ok(pid) = control.cast::<IAudioSessionControl2>().and_then(|c| c.GetProcessId())
+            else {
+                continue;
+            };
+            if process_name(pid).is_some_and(|name| matches_app(app, &name))
+                && let Ok(volume) = control.cast::<ISimpleAudioVolume>()
+            {
+                found.push(volume);
             }
         }
     }
-    matching_volumes
+    Ok(found)
+}
+
+/// Runs `f` on the player's sessions off the main thread.
+async fn with_player<F>(app: String, f: F) -> Result<VolumeState, String>
+where
+    F: FnOnce(&[ISimpleAudioVolume]) -> windows::core::Result<VolumeState> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let sessions = player_sessions(&app).map_err(|e| e.to_string())?;
+        if sessions.is_empty() {
+            return Err(NOT_FOUND.to_string());
+        }
+        f(&sessions).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn read(session: &ISimpleAudioVolume) -> windows::core::Result<VolumeState> {
+    unsafe {
+        Ok(VolumeState {
+            volume: session.GetMasterVolume()?,
+            muted: session.GetMute()?.as_bool(),
+        })
+    }
 }
 
 #[tauri::command]
-pub fn media_get_volume(app: Option<String>, force_master: Option<bool>) -> Result<VolumeState, String> {
-    let device = get_default_device().map_err(|e| e.to_string())?;
-
-    if force_master != Some(true) {
-        if let Some(ref target_app) = app {
-            if !target_app.trim().is_empty() {
-                let sessions = find_app_sessions(&device, target_app);
-                if let Some(first) = sessions.first() {
-                    let level = unsafe { first.GetMasterVolume().unwrap_or(1.0) };
-                    let mute = unsafe { first.GetMute().unwrap_or(BOOL::from(false)) };
-                    return Ok(VolumeState {
-                        volume: level,
-                        muted: mute.as_bool(),
-                        is_app_volume: true,
-                        app_name: Some(target_app.clone()),
-                    });
-                }
-            }
-        }
-    }
-
-    let (level, muted) = get_master_volume(&device).map_err(|e| e.to_string())?;
-    Ok(VolumeState {
-        volume: level,
-        muted,
-        is_app_volume: false,
-        app_name: None,
-    })
+pub async fn media_get_volume(app: String) -> Result<VolumeState, String> {
+    with_player(app, |sessions| read(&sessions[0])).await
 }
 
 #[tauri::command]
-pub fn media_set_volume(
-    level: f32,
-    app: Option<String>,
-    force_master: Option<bool>,
-) -> Result<VolumeState, String> {
-    let clamped = level.clamp(0.0, 1.0);
-    let device = get_default_device().map_err(|e| e.to_string())?;
-
-    if force_master != Some(true) {
-        if let Some(ref target_app) = app {
-            if !target_app.trim().is_empty() {
-                let sessions = find_app_sessions(&device, target_app);
-                if !sessions.is_empty() {
-                    let mut muted = false;
-                    for s in &sessions {
-                        unsafe {
-                            let _ = s.SetMasterVolume(clamped, core::ptr::null());
-                            if let Ok(m) = s.GetMute() {
-                                muted = m.as_bool();
-                            }
-                        }
-                    }
-                    return Ok(VolumeState {
-                        volume: clamped,
-                        muted,
-                        is_app_volume: true,
-                        app_name: Some(target_app.clone()),
-                    });
-                }
-            }
+pub async fn media_set_volume(app: String, level: f32) -> Result<VolumeState, String> {
+    let level = if level.is_finite() { level.clamp(0.0, 1.0) } else { 0.0 };
+    with_player(app, move |sessions| {
+        for session in sessions {
+            unsafe { session.SetMasterVolume(level, std::ptr::null())? };
         }
-    }
-
-    set_master_volume(&device, clamped).map_err(|e| e.to_string())?;
-    let (_, muted) = get_master_volume(&device).map_err(|e| e.to_string())?;
-    Ok(VolumeState {
-        volume: clamped,
-        muted,
-        is_app_volume: false,
-        app_name: None,
+        read(&sessions[0])
     })
+    .await
 }
 
 #[tauri::command]
-pub fn media_toggle_mute(app: Option<String>, force_master: Option<bool>) -> Result<VolumeState, String> {
-    let device = get_default_device().map_err(|e| e.to_string())?;
-
-    if force_master != Some(true) {
-        if let Some(ref target_app) = app {
-            if !target_app.trim().is_empty() {
-                let sessions = find_app_sessions(&device, target_app);
-                if let Some(first) = sessions.first() {
-                    let curr_mute = unsafe { first.GetMute().map(|m| m.as_bool()).unwrap_or(false) };
-                    let level = unsafe { first.GetMasterVolume().unwrap_or(1.0) };
-                    let new_mute = !curr_mute;
-                    for s in &sessions {
-                        unsafe {
-                            let _ = s.SetMute(new_mute, core::ptr::null());
-                        }
-                    }
-                    return Ok(VolumeState {
-                        volume: level,
-                        muted: new_mute,
-                        is_app_volume: true,
-                        app_name: Some(target_app.clone()),
-                    });
-                }
-            }
+pub async fn media_toggle_mute(app: String) -> Result<VolumeState, String> {
+    with_player(app, |sessions| {
+        let mute = !read(&sessions[0])?.muted;
+        for session in sessions {
+            unsafe { session.SetMute(mute, std::ptr::null())? };
         }
-    }
-
-    let (level, curr_mute) = get_master_volume(&device).map_err(|e| e.to_string())?;
-    let new_mute = !curr_mute;
-    set_master_mute(&device, new_mute).map_err(|e| e.to_string())?;
-    Ok(VolumeState {
-        volume: level,
-        muted: new_mute,
-        is_app_volume: false,
-        app_name: None,
+        read(&sessions[0])
     })
+    .await
 }

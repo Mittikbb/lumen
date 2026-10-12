@@ -4,6 +4,8 @@ import { NowPlaying, formatTime, mediaControl, playerName, trackKey } from "./us
 import { useVolume } from "./useVolume";
 import { useSettings } from "../settings/useSettings";
 
+type Volume = ReturnType<typeof useVolume>;
+
 /** New track slides in from the right, the old one drifts out to the left. */
 const swap = {
   initial: { opacity: 0, x: 28, filter: "blur(6px)" },
@@ -13,7 +15,7 @@ const swap = {
 
 export function MediaPanel({ media }: { media: NowPlaying | null }) {
   const settings = useSettings();
-  const showVolume = settings?.media?.volumeSlider ?? true;
+  const volume = useVolume(settings?.media.volumeSlider !== false ? (media?.app ?? null) : null);
 
   if (!media) {
     return <div className="panel empty">Сейчас ничего не играет</div>;
@@ -70,9 +72,7 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
           </div>
         )}
 
-        <div className={`media-controls-row${!showVolume ? " no-volume" : ""}`}>
-          {showVolume && <VolumeSlider app={media.app} />}
-
+        <div className="media-controls-row">
           <div className="media-controls">
             <button className="icon-btn" aria-label="Предыдущий трек" onClick={() => mediaControl("previous")}>
               <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5.5v13L9.5 12z" /></svg>
@@ -88,18 +88,23 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
               <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5.5v13L14.5 12z" /></svg>
             </button>
           </div>
+          <VolumeSlider app={media.app} volume={volume} />
         </div>
       </div>
     </div>
   );
 }
 
-export function VolumeSlider({ app }: { app: string }) {
-  const { volume, muted, isAppVolume, setVolume, toggleMute } = useVolume(app);
+/**
+ * The player's volume in the Windows mixer (not the system one, and not the
+ * slider inside the player, which Windows can't reach). A speaker icon right
+ * of the controls; the slider slides out on hover, the wheel works too.
+ */
+function VolumeSlider({ app, volume: { state, setVolume, toggleMute } }: { app: string; volume: Volume }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
-
-  const displayVolume = muted ? 0 : volume;
+  if (!state) return null;
+  const { volume, muted } = state;
 
   const updateFromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!trackRef.current) return;
@@ -132,32 +137,17 @@ export function VolumeSlider({ app }: { app: string }) {
   };
 
   const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.05 : -0.05;
-    setVolume(Math.max(0, Math.min(1, volume + delta)));
+    setVolume(volume + (e.deltaY < 0 ? 0.05 : -0.05));
   };
 
-  const percent = Math.round(displayVolume * 100);
-  const tooltipText = isAppVolume
-    ? `Громкость ${playerName(app)}: ${percent}%`
-    : `Общая громкость: ${percent}%`;
+  const percent = Math.round(volume * 100);
 
   return (
     <div
       className={`media-volume${dragging ? " dragging" : ""}${muted ? " muted" : ""}`}
       onWheel={onWheel}
-      title={tooltipText}
+      title={`Громкость ${playerName(app)} в микшере Windows: ${percent}%`}
     >
-      <button
-        type="button"
-        className="icon-btn vol-btn"
-        aria-label={muted ? "Включить звук" : "Выключить звук"}
-        title={muted ? "Включить звук" : "Выключить звук"}
-        onClick={() => toggleMute()}
-      >
-        <VolumeIcon volume={displayVolume} muted={muted} />
-      </button>
-
       <div
         ref={trackRef}
         className="vol-track"
@@ -166,12 +156,18 @@ export function VolumeSlider({ app }: { app: string }) {
         onPointerUp={onPointerUp}
       >
         <div className="vol-bar">
-          <div className="vol-fill" style={{ width: `${displayVolume * 100}%` }} />
-          <div className="vol-thumb" style={{ left: `${displayVolume * 100}%` }} />
+          <div className="vol-fill" style={{ width: `${volume * 100}%` }} />
+          <div className="vol-thumb" style={{ left: `${volume * 100}%` }} />
         </div>
       </div>
-
-      <span className="vol-label">{percent}%</span>
+      <button
+        type="button"
+        className="icon-btn vol-btn"
+        aria-label={muted ? "Включить звук" : "Выключить звук"}
+        onClick={() => toggleMute()}
+      >
+        <VolumeIcon volume={volume} muted={muted} />
+      </button>
     </div>
   );
 }
@@ -202,7 +198,6 @@ function VolumeIcon({ volume, muted }: { volume: number; muted: boolean }) {
     </svg>
   );
 }
-
 
 /** Album art, or a note placeholder when there is none or it fails to load. */
 export function Art({ src, className }: { src: string | null; className: string }) {

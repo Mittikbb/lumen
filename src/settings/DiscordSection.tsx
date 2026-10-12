@@ -47,15 +47,6 @@ export function DiscordSection({ settings }: { settings: Settings }) {
         <Row title="Звонок на острове" hint="Кто в голосовом канале, кто говорит, микрофон и звук">
           <Toggle on={prefs.voice} onChange={(voice) => set({ voice })} />
         </Row>
-        <Row
-          title="Ник говорящего справа"
-          hint="Когда кто-то говорит, прижимать имя говорящего к правому краю острова"
-        >
-          <Toggle
-            on={prefs.speakerRight ?? false}
-            onChange={(speakerRight) => set({ speakerRight })}
-          />
-        </Row>
         <Row title="Статус «Слушает»" hint="Трек из любого плеера в профиле Discord. Spotify Discord показывает сам">
           <Toggle on={prefs.presence} onChange={(presence) => set({ presence })} />
         </Row>

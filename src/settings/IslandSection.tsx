@@ -15,14 +15,6 @@ const px = (v: number) => `${v} px`;
 const ms = (v: number) => `${v} мс`;
 const times = (v: number) => `${String(Number(v.toFixed(2))).replace(".", ",")}×`;
 
-const DEFAULT_SHAPE_PRESET = {
-  width: 176,
-  height: 35,
-  expandedWidth: 570,
-  radius: 24,
-  offsetTop: 25,
-};
-
 /** Остров: shape, hover behaviour, what the collapsed island shows, notices. */
 export function IslandSection({ settings }: { settings: Settings }) {
   const { island, collapsed, notices, display } = settings;
@@ -31,20 +23,9 @@ export function IslandSection({ settings }: { settings: Settings }) {
   const notice = (patch: Partial<NoticePrefs>) => updateSettings({ notices: patch });
   const monitors = useMonitors();
 
-  const resetToPreset = () => {
-    shape(DEFAULT_SHAPE_PRESET);
-    if (isTauri) invoke("overlay_reset_position");
-    else updateSettings({ display: { x: null, y: null } });
-  };
-
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "6px 4px -6px" }}>
-        <div className="st-heading" style={{ margin: 0 }}>Форма</div>
-        <button className="st-link" style={{ fontSize: 12 }} onClick={resetToPreset}>
-          По умолчанию
-        </button>
-      </div>
+      <Heading>Форма</Heading>
       <div className="st-card">
         <Row title="Ширина в покое">
           <Slider value={island.width} min={160} max={340} step={4} format={px} onChange={(width) => shape({ width })} />
@@ -92,32 +73,11 @@ export function IslandSection({ settings }: { settings: Settings }) {
             onChange={(hideFullscreen) => updateSettings({ display: { hideFullscreen } })}
           />
         </Row>
-        <Row
-          title="Прятать при распахнутых окнах"
-          hint="Скрывать остров, когда активное окно развёрнуто на весь экран"
-        >
+        <Row title="Прятать при развёрнутых окнах" hint="Когда активное окно развёрнуто на весь экран">
           <Toggle
             on={display.hideMaximized}
             onChange={(hideMaximized) => updateSettings({ display: { hideMaximized } })}
           />
-        </Row>
-        <Row
-          title="Положение на экране"
-          hint="Зажмите Ctrl и перетащите остров мышью в любое место"
-        >
-          {display.x != null && display.y != null ? (
-            <button
-              className="st-button quiet"
-              onClick={() => {
-                if (isTauri) invoke("overlay_reset_position");
-                else updateSettings({ display: { x: null, y: null } });
-              }}
-            >
-              Сбросить по центру
-            </button>
-          ) : (
-            <span style={{ fontSize: 13, opacity: 0.6 }}>По центру вверху</span>
-          )}
         </Row>
         <Row title="Задержка раскрытия" hint="Сколько держать курсор над островом">
           <Slider value={island.openDelay} min={0} max={600} step={20} format={ms} onChange={(openDelay) => shape({ openDelay })} />
@@ -153,16 +113,6 @@ export function IslandSection({ settings }: { settings: Settings }) {
         </Row>
         <Row title="Играющий трек" hint="Обложка и название вместо часов">
           <Toggle on={collapsed.track} onChange={(track) => rest({ track })} />
-        </Row>
-      </div>
-
-      <Heading>Медиаплеер</Heading>
-      <div className="st-card">
-        <Row title="Ползунок громкости" hint="Показывать мини-трек громкости в развёрнутом плеере">
-          <Toggle
-            on={settings.media?.volumeSlider ?? true}
-            onChange={(volumeSlider) => updateSettings({ media: { volumeSlider } })}
-          />
         </Row>
       </div>
 

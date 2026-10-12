@@ -31,8 +31,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(overlay::HitRegion::default())
         .manage(overlay::Focus::default())
-        .manage(overlay::VisibilityState::default())
-        .manage(overlay::DragState::default())
         .manage(media::MediaState::default())
         .manage(clipboard::History::default())
         .manage(launcher::Launcher::default())
@@ -47,12 +45,6 @@ pub fn run() {
             overlay::overlay_take_focus,
             overlay::overlay_release_focus,
             overlay::overlay_monitors,
-            overlay::overlay_show_island,
-            overlay::overlay_hide_island,
-            overlay::overlay_start_drag,
-            overlay::overlay_drag_by,
-            overlay::overlay_end_drag,
-            overlay::overlay_reset_position,
             media::media_state,
             media::media_control,
             volume::media_get_volume,

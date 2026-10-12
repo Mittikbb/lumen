@@ -78,8 +78,6 @@ export interface DisplayPrefs {
   monitor: string | null;
   hideFullscreen: boolean;
   hideMaximized: boolean;
-  x?: number | null;
-  y?: number | null;
 }
 
 export interface ClipboardPrefs {
@@ -103,7 +101,6 @@ export interface DiscordPrefs {
   clientSecret: string;
   voice: boolean;
   presence: boolean;
-  speakerRight: boolean;
 }
 
 export interface MediaPrefs {
@@ -146,11 +143,11 @@ export const DEFAULT_SETTINGS: Settings = {
   city: null,
   look: { glow: "normal", accent: "sunset", artColors: true, beat: true, lean: true },
   island: {
-    width: 176,
-    height: 35,
-    expandedWidth: 570,
-    radius: 24,
-    offsetTop: 25,
+    width: 220,
+    height: 40,
+    expandedWidth: 560,
+    radius: 30,
+    offsetTop: 12,
     openDelay: 120,
     closeDelay: 380,
     pull: 1,
@@ -158,12 +155,12 @@ export const DEFAULT_SETTINGS: Settings = {
   collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true },
   notices: { copy: true, shelf: true, rain: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
-  display: { monitor: null, hideFullscreen: true, hideMaximized: false, x: null, y: null },
+  display: { monitor: null, hideFullscreen: true, hideMaximized: false },
   clipboard: { limit: 60, keepDays: 0, ignore: [] },
   shelf: { limit: 40 },
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },
   search: { engine: "google" },
-  discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true, speakerRight: false },
+  discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true },
   updates: { auto: true },
   media: { volumeSlider: true },
 };

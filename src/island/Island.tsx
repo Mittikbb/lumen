@@ -24,11 +24,7 @@ import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MiniCall } from "../discord/CallPanel";
-import { useIslandDrag } from "./useIslandDrag";
 import type { MotionPrefs } from "../settings/useSettings";
-
-/** Headroom inside the overlay window so the glow halo has space above the island without clipping. */
-export const HEADROOM = 110;
 
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
 const NOTICE_WIDTH = 290;
@@ -98,7 +94,6 @@ const SCAN_ICON = (
 
 export function Island() {
   const ref = useRef<HTMLDivElement>(null);
-  const drag = useIslandDrag();
   const cursor = useCursor();
   const media = useMedia();
   const settings = useSettings();
@@ -114,17 +109,6 @@ export function Island() {
   const reactive = useAudioLevels() && !!media?.playing && look?.beat !== false;
   const track = media ? trackKey(media) : "";
   const [hovered, setHovered] = useState(false);
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    if (!isTauri) return;
-    const unlisten = listen<boolean>("lumen://visibility", (e) => {
-      setVisible(e.payload);
-    });
-    return () => {
-      unlisten.then((off) => off());
-    };
-  }, []);
   const [tab, setTab] = useState<TabId>("media");
   const clips = useClipboard();
   const launcherOpen = useLauncherOpen();
@@ -200,7 +184,7 @@ export function Island() {
     let dx = 0;
     let dy = 0;
     // Strength comes from the pull slider (0 switches it off).
-    if (el && cursor && !expanded && !moves.reduced && !drag.dragging) {
+    if (el && cursor && !expanded && !moves.reduced) {
       const cx = el.offsetLeft + el.offsetWidth / 2;
       const cy = el.offsetTop + el.offsetHeight / 2;
       dx = cursor.x - cx;
@@ -288,82 +272,21 @@ export function Island() {
         ? { ...collapsedSize, width: Math.max(collapsedSize.width, 250) }
         : collapsedSize;
   const fade = (px: number) => (blur ? `blur(${px}px)` : "blur(0px)");
-  const exitY = -(HEADROOM + shape.offsetTop + size.height + 30);
-
-  const wrapperTransition = moves.reduced
-    ? { duration: 0 }
-    : visible
-      ? ({
-          type: "spring",
-          stiffness: 340 * SPEED[moves.speed],
-          damping: DAMPING[moves.bounce],
-          mass: 0.85,
-        } as const)
-      : ({
-          type: "spring",
-          stiffness: 420 * SPEED[moves.speed],
-          damping: 34,
-          mass: 0.7,
-        } as const);
 
   return (
-    <div className="stage" style={{ paddingTop: HEADROOM + shape.offsetTop }}>
+    <div className="stage" style={{ paddingTop: shape.offsetTop }}>
       <motion.div
-        className="island-wrapper"
-        initial={{
-          y: exitY,
-          scale: 0.88,
-          opacity: 0,
-          filter: fade(8),
+        ref={ref}
+        className={`island${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}`}
+        initial={false}
+        animate={{
+          width: size.width,
+          height: size.height,
+          borderRadius: expanded ? shape.radius : shape.height / 2,
         }}
-        animate={
-          visible
-            ? {
-                y: 0,
-                scale: 1,
-                opacity: 1,
-                filter: "none",
-              }
-            : {
-                y: exitY,
-                scale: 0.88,
-                opacity: 0,
-                filter: fade(8),
-              }
-        }
-        transition={wrapperTransition}
-        style={{
-          transformOrigin: "50% 0%",
-          pointerEvents: visible ? "auto" : "none",
-        }}
+        transition={shapeTransition(moves)}
+        style={{ x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" }}
       >
-        <motion.div
-          className={`island-glow${media?.playing ? " is-playing" : ""}${moves.reduced ? " reduced" : ""}`}
-          initial={false}
-          animate={{
-            width: size.width,
-            height: size.height,
-            borderRadius: expanded ? shape.radius : shape.height / 2,
-          }}
-          transition={shapeTransition(moves)}
-          style={{ x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" }}
-        />
-        <motion.div
-          ref={ref}
-          className={`island${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}${drag.ctrlDown ? " ctrl-grab" : ""}${drag.dragging ? " is-dragging" : ""}`}
-          initial={false}
-          animate={{
-            width: size.width,
-            height: size.height,
-            borderRadius: expanded ? shape.radius : shape.height / 2,
-          }}
-          transition={shapeTransition(moves)}
-          style={{ x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" }}
-          onPointerDown={drag.onPointerDown}
-          onPointerMove={drag.onPointerMove}
-          onPointerUp={drag.onPointerUp}
-          onClickCapture={drag.onClickCapture}
-        >
         <AnimatePresence initial={false}>
           {expanded ? (
             <motion.div
@@ -461,7 +384,7 @@ export function Island() {
                   <span className="notice-detail">{notice.detail}</span>
                 </motion.div>
               ) : voice && showsTab("call") ? (
-                <MiniCall voice={voice} speakerRight={prefs.discord.speakerRight} />
+                <MiniCall voice={voice} />
               ) : media && rest.track ? (
                 <>
                   <AnimatePresence mode="popLayout" initial={false}>
@@ -497,7 +420,6 @@ export function Island() {
           )}
         </AnimatePresence>
       </motion.div>
-    </motion.div>
-  </div>
-);
+    </div>
+  );
 }
