@@ -1546,14 +1546,14 @@ html.capture-root #root {
 }
 
 /* Carries the island's lean, so the drop keeps its gap while the island sways. */
-.call-drop-lean {
+.drop-lean {
   position: absolute;
   top: 0;
   left: 0;
 }
 
-/* "Капля": the call as a drop left of the island; a pill while it announces. */
-.call-drop {
+/* A drop beside the island ("Капля", the timer); a pill while it says more. */
+.drop-body {
   position: absolute;
   left: 0;
   display: flex;
@@ -1564,8 +1564,8 @@ html.capture-root #root {
   pointer-events: none;
 }
 
-.call-drop.halo,
-.call-drop.solid {
+.drop-body.halo,
+.drop-body.solid {
   background: var(--island-bg);
   animation: glow 3.2s ease-in-out infinite;
 }
@@ -1577,13 +1577,13 @@ html.capture-root #root {
 }
 
 /* 1 px smaller, like .island-ghost, so the glow's ring stays visible. */
-.call-drop.fill {
+.drop-body.fill {
   background: var(--island-bg);
   clip-path: inset(1px round 999px);
 }
 
-/* Popped out, the drop takes clicks: mic, or sound on a double click. */
-.call-drop.live {
+/* Popped out, a drop takes clicks. */
+.drop-body.live {
   pointer-events: auto;
   cursor: pointer;
 }
@@ -1610,7 +1610,7 @@ html.capture-root #root {
   box-shadow: 0 0 0 1.5px var(--island-bg);
 }
 
-.call-drop .drop-off svg {
+.drop-body .drop-off svg {
   width: 8px;
   height: 8px;
   stroke-width: 2.6;
@@ -1631,7 +1631,7 @@ html.capture-root #root {
     0 0 10px 2px rgba(59, 165, 93, 0.55);
 }
 
-.call-drop svg {
+.drop-body svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -1678,6 +1678,85 @@ html.capture-root #root {
 
 .drop-mark.bad {
   color: #ff6b6e;
+}
+
+/* The timer: a ring that empties, then the time left. */
+.timer-ring {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.timer-ring > svg {
+  position: absolute;
+  inset: 14%;
+  width: 72%;
+  height: 72%;
+}
+
+.timer-ring circle {
+  fill: none;
+  stroke-width: 2.6;
+}
+
+.timer-ring .track {
+  stroke: color-mix(in srgb, var(--island-fg) 14%, transparent);
+}
+
+.timer-ring .left {
+  stroke: var(--glow-a);
+  transition: stroke-dashoffset 0.4s linear;
+}
+
+/* Paused: two bars inside the ring; done: a bell. */
+.timer-ring > svg + svg {
+  position: static;
+  width: 42%;
+  height: 42%;
+}
+
+.timer-time {
+  padding-right: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--island-fg);
+  white-space: nowrap;
+}
+
+.timer-drop.paused .timer-time {
+  color: var(--island-fg-muted);
+}
+
+.timer-drop.paused .timer-ring {
+  color: var(--island-fg);
+}
+
+.timer-drop.done .timer-ring {
+  color: var(--glow-a);
+  animation: timer-ring 1s ease-in-out infinite;
+}
+
+.timer-drop.done.halo {
+  animation: timer-glow 1s ease-in-out infinite;
+}
+
+@keyframes timer-ring {
+  0%, 100% { transform: rotate(0); }
+  10% { transform: rotate(-14deg); }
+  20% { transform: rotate(12deg); }
+  30% { transform: rotate(-8deg); }
+  40% { transform: rotate(0); }
+}
+
+@keyframes timer-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow-a) 30%, transparent), 0 0 14px 2px color-mix(in srgb, var(--glow-a) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow-a) 70%, transparent), 0 0 28px 8px color-mix(in srgb, var(--glow-a) 60%, transparent);
+  }
 }
 
 /* "Имя говорящего справа": the speaker's name moves to the right edge. */

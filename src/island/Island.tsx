@@ -26,7 +26,10 @@ import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MiniCall } from "../discord/CallPanel";
-import { CallDrop, DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, notifyWidth, useDropMotion } from "../discord/CallDrop";
+import { CallDrop, notifyWidth } from "../discord/CallDrop";
+import { DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, useDropMotion } from "./Drop";
+import { useTimer } from "../timer/timer";
+import { TimerDrop, timerWidth } from "../timer/TimerDrop";
 import { useCallEvents } from "../discord/useCallEvents";
 import type { MotionPrefs } from "../settings/useSettings";
 
@@ -106,6 +109,7 @@ export function Island() {
   const ref = useRef<HTMLDivElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<HTMLDivElement>(null);
   const drag = useIslandDrag(ref);
   const anchor = useAnchor();
   const cursor = useCursor();
@@ -181,7 +185,7 @@ export function Island() {
   const center = anchor ? anchor.x : window.innerWidth / 2;
   const top = anchor ? anchor.y : shape.offsetTop;
   const dropCall = voice && showsTab("call") && prefs.call.style === "drop" ? voice : null;
-  const drop = dropGeometry(center, top, collapsedSize.width, shape.height);
+  const drop = dropGeometry(center, top, collapsedSize.width, shape.height, "left");
   const dropAt = dropHover(cursor, drop, shape.height, prefs.call.reach);
   const onDrop = !!dropCall && !expanded && !drag.dragging && dropAt.over;
   // Joins, leaves, mic and sound changes: the drop pops out to tell.
@@ -195,14 +199,39 @@ export function Island() {
         : "rest";
   const dropMotion = useDropMotion(
     dropState,
-    drop.islandLeft,
+    drop.edge,
+    "left",
     shape.height,
     notifyWidth(shape.height, callEvent),
     prefs.call.pull,
     moves.reduced,
   );
-  const liquid = prefs.call.style === "drop" && !moves.reduced;
   const dropLive = dropState === "out" || dropState === "notify";
+
+  // A timer from search ("таймер 10м") flows out of the right end and stays
+  // out while it runs; cancelled, it melts back in before it goes.
+  const { timer: liveTimer, left: timerLeft } = useTimer();
+  const shownTimer = useLingering(liveTimer, 600);
+  const timerEdge = dropGeometry(center, top, collapsedSize.width, shape.height, "right").edge;
+  const timerState: DropState = expanded ? "merged" : liveTimer && !drag.dragging ? "notify" : "rest";
+  const timerMotion = useDropMotion(
+    timerState,
+    timerEdge,
+    "right",
+    shape.height,
+    timerWidth(shape.height, shownTimer, timerLeft),
+    prefs.call.pull,
+    moves.reduced,
+  );
+  const timerLive = !!liveTimer && timerState === "notify";
+
+  const liquid = (prefs.call.style === "drop" || !!shownTimer) && !moves.reduced;
+  // The island's content, nudged aside by drops squeezing out of either end.
+  const pushes = useRef({ call: false, timer: false });
+  pushes.current = { call: liquid && !!dropCall, timer: liquid && !!shownTimer };
+  const push = useTransform(
+    () => (pushes.current.call ? dropMotion.push.get() : 0) + (pushes.current.timer ? timerMotion.push.get() : 0),
+  );
   // Clicks on the drop: each one holds off opening the island.
   const [pokes, setPokes] = useState(0);
   const poke = () => setPokes((n) => n + 1);
@@ -216,8 +245,8 @@ export function Island() {
     return () => window.removeEventListener("blur", onBlur);
   }, [launcherOpen]);
 
-  // The window catches the mouse over the drop too while it's out, for clicks.
-  useHitRegion(ref, dropCall && dropLive ? [dropRef] : []);
+  // The window catches the mouse over the drops too while they're out, for clicks.
+  useHitRegion(ref, [...(dropCall && dropLive ? [dropRef] : []), ...(timerLive ? [timerRef] : [])]);
 
   // Hover intent: open a beat after the pointer arrives, close a bit after it leaves.
   const inside = (cursor?.inside ?? false) || onDrop;
@@ -229,7 +258,7 @@ export function Island() {
   const fromDrop = useRef(false);
   useEffect(() => {
     if (!inside || hovered) return;
-    fromDrop.current = onDrop || (!!cursor && cursor.x < drop.islandLeft + shape.height);
+    fromDrop.current = onDrop || (!!cursor && cursor.x < drop.edge + shape.height);
     // Only the moment the pointer arrives counts.
   }, [inside]);
   useEffect(() => {
@@ -367,20 +396,25 @@ export function Island() {
   return (
     <div className="stage" style={stage}>
       {liquid && (
-        // The call drop needs one liquid shape, so the island is drawn in
-        // layers: the glow, then the fill of island, neck and drop melted
-        // together by the filter, then the drop's face and the island on top
-        // (without a glow of its own, or its ring would cut the neck).
+        // The drops need one liquid shape with the island, so it is drawn in
+        // layers: the glow, then the fill of island, necks and drops melted
+        // together by the filter, then the drops' faces and the island on top
+        // (without a glow of its own, or its ring would cut the necks).
         <>
           <motion.div ref={haloRef} className={`island island-halo${glow}`} {...twin(0)} />
-          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+          <AnimatePresence>
+            {dropCall && <CallDrop key="drop" layer="halo" event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+            {shownTimer && <TimerDrop key="timer" layer="halo" timer={shownTimer} left={timerLeft} motion={timerMotion} top={top} lean={{ x, y }} />}
+          </AnimatePresence>
           <div className="liquid">
             <LiquidFilter />
             {/* 1 px smaller: the filter grows shapes a little, which would cover the glow's ring. */}
             <motion.div className="island-ghost" {...twin(1)} />
             <AnimatePresence>
-              {dropCall && <DropNeck key="neck" motion={dropMotion} top={top} islandLeft={drop.islandLeft} lean={{ x, y }} />}
+              {dropCall && <DropNeck key="neck" motion={dropMotion} top={top} edge={drop.edge} lean={{ x, y }} />}
               {dropCall && <CallDrop key="drop" layer="fill" event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+              {shownTimer && <DropNeck key="timer-neck" motion={timerMotion} top={top} edge={timerEdge} lean={{ x, y }} />}
+              {shownTimer && <TimerDrop key="timer" layer="fill" timer={shownTimer} left={timerLeft} motion={timerMotion} top={top} lean={{ x, y }} />}
             </AnimatePresence>
           </div>
         </>
@@ -399,6 +433,19 @@ export function Island() {
             live={dropLive}
             hitRef={dropRef}
             onPoke={poke}
+          />
+        )}
+        {shownTimer && (
+          <TimerDrop
+            key="timer"
+            layer={liquid ? "face" : "solid"}
+            timer={shownTimer}
+            left={timerLeft}
+            motion={timerMotion}
+            top={top}
+            lean={{ x, y }}
+            live={timerLive}
+            hitRef={timerRef}
           />
         )}
       </AnimatePresence>
@@ -493,8 +540,8 @@ export function Island() {
             <motion.div
               key="collapsed"
               className="collapsed"
-              // Nudged aside while the call drop squeezes out of the left end.
-              style={{ x: liquid && dropCall ? dropMotion.push : 0 }}
+              // Nudged aside while a drop squeezes out of either end.
+              style={{ x: push }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: { delay: 0.1 } }}
               exit={{ opacity: 0, transition: { duration: 0.08 } }}
@@ -553,4 +600,15 @@ export function Island() {
       </motion.div>
     </div>
   );
+}
+
+/** `value`, or for `ms` after it turns null, the last value it had. */
+function useLingering<T>(value: T | null, ms: number): T | null {
+  const [kept, setKept] = useState(value);
+  useEffect(() => {
+    if (value) return setKept(value);
+    const t = setTimeout(() => setKept(null), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return value ?? kept;
 }

@@ -1,14 +1,16 @@
-import { RefObject, useEffect } from "react";
+import { RefObject, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./env";
 
 /**
  * Keeps the Rust side informed about where the island is, so the window only
  * catches the mouse over the island and lets clicks through everywhere else.
- * `extra` are other clickable bits beside it (the call drop); the island
+ * `extra` are other clickable bits beside it (the drops); the island
  * itself always comes first.
  */
 export function useHitRegion(ref: RefObject<HTMLElement | null>, extra: RefObject<HTMLElement | null>[] = []) {
+  const others = useRef(extra);
+  others.current = extra;
   useEffect(() => {
     if (!isTauri) return;
     let frame = 0;
@@ -17,7 +19,7 @@ export function useHitRegion(ref: RefObject<HTMLElement | null>, extra: RefObjec
     const tick = () => {
       const el = ref.current;
       if (el) {
-        const rects = [el, ...extra.map((r) => r.current)]
+        const rects = [el, ...others.current.map((r) => r.current)]
           .filter((e): e is HTMLElement => !!e)
           .map((e) => {
             const r = e.getBoundingClientRect();
@@ -34,6 +36,5 @@ export function useHitRegion(ref: RefObject<HTMLElement | null>, extra: RefObjec
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-    // The refs are stable; only the list's length could change.
-  }, [ref, extra.length]);
+  }, [ref]);
 }

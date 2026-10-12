@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../island/env";
 import { formatShortcut, Hotkeys, openSettings, SearchEngine } from "../settings/useSettings";
 import { ENGINES } from "./engines";
+import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
 
 const MAX_APPS = 5;
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
@@ -27,6 +28,7 @@ const ICONS = {
   shot: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />),
   scan: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h8M8 12h8M8 15h5" />),
   settings: icon(<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z" />),
+  timer: icon(<path d="M10 2h4M12 14l3-3M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" />),
   link: icon(<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />),
 };
 
@@ -74,6 +76,27 @@ function buildResults(query: string, apps: App[], ai: App | null, hotkeys: Hotke
       openSettings();
     };
     out.push({ key: "settings", icon: ICONS.settings, title: "Настройки Lumen", hint: "Lumen", run });
+  }
+
+  // "таймер 10м": a countdown in a drop on the island's right.
+  const span = parseTimer(q);
+  if (span) {
+    const run = () => {
+      timer.start(span);
+      launcher.close(true);
+    };
+    out.push({ key: "timer", icon: ICONS.timer, title: `Таймер на ${formatSpan(span)}`, hint: "Enter — запустить", run });
+  } else if (isTimerQuery(q)) {
+    const running = timer.get();
+    if (running && !running.doneAt) {
+      const run = () => {
+        timer.stop();
+        launcher.close(true);
+      };
+      out.push({ key: "timer", icon: ICONS.timer, title: `Отменить таймер на ${formatSpan(running.total)}`, hint: "Таймер", run });
+    } else {
+      out.push({ key: "timer", icon: ICONS.timer, title: "Таймер: допиши время", hint: "10м · 1ч 30м · 90с · 1:30", run: () => {} });
+    }
   }
 
   const value = calculate(q);
