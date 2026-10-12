@@ -5,7 +5,7 @@ import { isTauri } from "../island/env";
 import type { City } from "../weather/useWeather";
 
 export type GlowLevel = "off" | "soft" | "normal" | "bright";
-export type Accent = "sunset" | "ocean" | "mint" | "rose" | "violet" | "ice";
+export type Accent = "sunset" | "rose" | "violet" | "midnight" | "ocean" | "mint" | "ice";
 export type Speed = "slow" | "normal" | "fast";
 export type Bounce = "calm" | "normal" | "springy";
 export type SearchEngine = "google" | "yandex" | "duckduckgo" | "bing";
@@ -77,6 +77,7 @@ export interface DisplayPrefs {
   /** Monitor name; null for the primary one. */
   monitor: string | null;
   hideFullscreen: boolean;
+  hideMaximized: boolean;
 }
 
 export interface ClipboardPrefs {
@@ -102,6 +103,10 @@ export interface DiscordPrefs {
   presence: boolean;
 }
 
+export interface MediaPrefs {
+  volumeSlider: boolean;
+}
+
 export interface Settings {
   hotkeys: Hotkeys;
   /** Start menu AppID of the AI app; null picks the first one installed. */
@@ -123,6 +128,7 @@ export interface Settings {
   search: { engine: SearchEngine };
   discord: DiscordPrefs;
   updates: { auto: boolean };
+  media: MediaPrefs;
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] | null ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -149,13 +155,14 @@ export const DEFAULT_SETTINGS: Settings = {
   collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true },
   notices: { copy: true, shelf: true, rain: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
-  display: { monitor: null, hideFullscreen: true },
+  display: { monitor: null, hideFullscreen: true, hideMaximized: false },
   clipboard: { limit: 60, keepDays: 0, ignore: [] },
   shelf: { limit: 40 },
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },
   search: { engine: "google" },
   discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true },
   updates: { auto: true },
+  media: { volumeSlider: true },
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

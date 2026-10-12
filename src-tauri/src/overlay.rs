@@ -11,7 +11,7 @@ use windows::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
     UI::WindowsAndMessaging::{
-        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId,
+        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsZoomed,
         SetForegroundWindow,
     },
 };
@@ -222,8 +222,8 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
     });
 }
 
-/// Hides the island while a fullscreen app (a game, a video) is in front on
-/// its monitor, if the setting allows, and brings it back afterwards.
+/// Hides the island while a fullscreen app (a game, a video) or, if asked, a
+/// maximized window is in front on its monitor, and brings it back afterwards.
 pub fn spawn_fullscreen_watch(app: AppHandle) {
     thread::spawn(move || {
         let mut hidden = false;
@@ -235,8 +235,12 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
             let Ok(hwnd) = window.hwnd() else {
                 continue;
             };
-            let hide =
-                settings::get(&app).display.hide_fullscreen && fullscreen_in_front(HWND(hwnd.0));
+            let display = settings::get(&app).display;
+            let hide = (display.hide_fullscreen || display.hide_maximized) && {
+                let cover = cover_in_front(HWND(hwnd.0));
+                (display.hide_fullscreen && cover.fullscreen)
+                    || (display.hide_maximized && cover.maximized)
+            };
             if hide != hidden {
                 let _ = if hide { window.hide() } else { window.show() };
                 hidden = hide;
@@ -245,17 +249,25 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
     });
 }
 
-/// Whether another app's window fills the whole monitor the island is on.
-fn fullscreen_in_front(island: HWND) -> bool {
+/// How another app's window in front covers the island's monitor.
+#[derive(Default)]
+struct Cover {
+    /// Fills the whole monitor, taskbar included.
+    fullscreen: bool,
+    /// Maximized, or fills the work area.
+    maximized: bool,
+}
+
+fn cover_in_front(island: HWND) -> Cover {
     unsafe {
         let front = GetForegroundWindow();
         if front.is_invalid() {
-            return false;
+            return Cover::default();
         }
         let mut pid = 0;
         GetWindowThreadProcessId(front, Some(&mut pid));
         if pid == std::process::id() {
-            return false;
+            return Cover::default();
         }
         // The desktop and taskbar cover the screen too, but aren't "fullscreen".
         let mut class = [0u16; 64];
@@ -269,12 +281,12 @@ fn fullscreen_in_front(island: HWND) -> bool {
         ]
         .contains(&class.as_str())
         {
-            return false;
+            return Cover::default();
         }
 
         let monitor = MonitorFromWindow(front, MONITOR_DEFAULTTONEAREST);
         if monitor != MonitorFromWindow(island, MONITOR_DEFAULTTONEAREST) {
-            return false;
+            return Cover::default();
         }
         let mut info = MONITORINFO {
             cbSize: size_of::<MONITORINFO>() as u32,
@@ -284,12 +296,17 @@ fn fullscreen_in_front(island: HWND) -> bool {
         if !GetMonitorInfoW(monitor, &mut info).as_bool()
             || GetWindowRect(front, &mut rect).is_err()
         {
-            return false;
+            return Cover::default();
         }
-        let screen = info.rcMonitor;
-        rect.left <= screen.left
-            && rect.top <= screen.top
-            && rect.right >= screen.right
-            && rect.bottom >= screen.bottom
+        let covers = |area: RECT| {
+            rect.left <= area.left
+                && rect.top <= area.top
+                && rect.right >= area.right
+                && rect.bottom >= area.bottom
+        };
+        Cover {
+            fullscreen: covers(info.rcMonitor),
+            maximized: IsZoomed(front).as_bool() || covers(info.rcWork),
+        }
     }
 }

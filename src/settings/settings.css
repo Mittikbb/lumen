@@ -314,7 +314,8 @@ html.settings-root #root {
   width: 24px;
   height: 24px;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-sizing: border-box;
   border-radius: 50%;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;

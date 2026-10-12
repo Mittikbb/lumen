@@ -53,6 +53,8 @@ pub struct Display {
     pub monitor: Option<String>,
     /// Hide while a fullscreen app (game, video) is in front.
     pub hide_fullscreen: bool,
+    /// Hide while a window is maximized (zoomed) on the island's monitor.
+    pub hide_maximized: bool,
 }
 
 impl Default for Display {
@@ -60,6 +62,7 @@ impl Default for Display {
         Self {
             monitor: None,
             hide_fullscreen: true,
+            hide_maximized: false,
         }
     }
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ENGINES } from "../launcher/engines";
-import { Heading, Row, Slider } from "./controls";
+import { Heading, Row, Slider, Toggle } from "./controls";
 import { SearchEngine, Settings, updateSettings } from "./useSettings";
 
 const KEEP_DAYS = [
@@ -72,6 +72,16 @@ export function ModulesSection({ settings }: { settings: Settings }) {
               </option>
             ))}
           </select>
+        </Row>
+      </div>
+
+      <Heading>Медиа</Heading>
+      <div className="st-card">
+        <Row title="Ползунок громкости" hint="Регулировка громкости трека прямо в плеере">
+          <Toggle
+            on={settings.media?.volumeSlider ?? true}
+            onChange={(volumeSlider) => updateSettings({ media: { volumeSlider } })}
+          />
         </Row>
       </div>
     </>

@@ -7,6 +7,7 @@ export const ACCENTS: Record<Accent, { label: string; a: string; b: string }> = 
   sunset: { label: "Закат", a: "rgb(247, 178, 103)", b: "rgb(242, 92, 84)" },
   rose: { label: "Роза", a: "rgb(255, 154, 196)", b: "rgb(226, 86, 160)" },
   violet: { label: "Аметист", a: "rgb(190, 158, 255)", b: "rgb(132, 92, 246)" },
+  midnight: { label: "Полночь", a: "rgb(18, 12, 30)", b: "rgb(175, 75, 255)" },
   ocean: { label: "Океан", a: "rgb(124, 196, 255)", b: "rgb(84, 118, 248)" },
   mint: { label: "Мята", a: "rgb(128, 232, 196)", b: "rgb(46, 186, 150)" },
   ice: { label: "Иней", a: "rgb(236, 238, 245)", b: "rgb(160, 168, 190)" },

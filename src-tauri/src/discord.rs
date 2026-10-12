@@ -212,17 +212,28 @@ struct Pipe {
 
 impl Pipe {
     fn connect() -> Result<Self, String> {
+        let mut permission_denied = false;
         for i in 0..10 {
             let path = format!(r"\\.\pipe\discord-ipc-{i}");
-            if let Ok(file) = OpenOptions::new().read(true).write(true).open(path) {
-                return Ok(Self {
-                    file,
-                    nonce: 0,
-                    backlog: VecDeque::new(),
-                });
+            match OpenOptions::new().read(true).write(true).open(path) {
+                Ok(file) => {
+                    return Ok(Self {
+                        file,
+                        nonce: 0,
+                        backlog: VecDeque::new(),
+                    });
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    permission_denied = true;
+                }
+                Err(_) => {}
             }
         }
-        Err(NOT_RUNNING.into())
+        if permission_denied {
+            Err("Discord запущен от имени администратора. Запустите Lumen от администратора или Discord без прав администратора".into())
+        } else {
+            Err(NOT_RUNNING.into())
+        }
     }
 
     fn send(&mut self, op: u32, body: &Value) -> Result<(), String> {

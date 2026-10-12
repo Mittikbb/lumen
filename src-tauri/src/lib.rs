@@ -15,6 +15,7 @@ mod shelf;
 mod shell_image;
 mod tray;
 mod updates;
+mod volume;
 
 use tauri::Manager;
 
@@ -46,6 +47,9 @@ pub fn run() {
             overlay::overlay_monitors,
             media::media_state,
             media::media_control,
+            volume::media_get_volume,
+            volume::media_set_volume,
+            volume::media_toggle_mute,
             clipboard::clipboard_history,
             clipboard::clipboard_paste,
             clipboard::clipboard_delete,

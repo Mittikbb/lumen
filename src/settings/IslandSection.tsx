@@ -73,6 +73,12 @@ export function IslandSection({ settings }: { settings: Settings }) {
             onChange={(hideFullscreen) => updateSettings({ display: { hideFullscreen } })}
           />
         </Row>
+        <Row title="Прятать при развёрнутых окнах" hint="Когда активное окно развёрнуто на весь экран">
+          <Toggle
+            on={display.hideMaximized}
+            onChange={(hideMaximized) => updateSettings({ display: { hideMaximized } })}
+          />
+        </Row>
         <Row title="Задержка раскрытия" hint="Сколько держать курсор над островом">
           <Slider value={island.openDelay} min={0} max={600} step={20} format={ms} onChange={(openDelay) => shape({ openDelay })} />
         </Row>
