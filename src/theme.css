@@ -1538,6 +1538,13 @@ html.capture-root #root {
   background: var(--island-bg);
 }
 
+/* The neck the drop drags out of the island; the filter rounds it into both. */
+.drop-neck {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--island-bg);
+}
+
 /* Carries the island's lean, so the drop keeps its gap while the island sways. */
 .call-drop-lean {
   position: absolute;

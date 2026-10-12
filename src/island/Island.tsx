@@ -26,7 +26,7 @@ import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MiniCall } from "../discord/CallPanel";
-import { CallDrop, DropState, LiquidFilter, dropGeometry, dropHover } from "../discord/CallDrop";
+import { CallDrop, DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, useDropMotion } from "../discord/CallDrop";
 import type { MotionPrefs } from "../settings/useSettings";
 
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
@@ -175,8 +175,8 @@ export function Island() {
   const drop = dropGeometry(center, top, collapsedSize.width, shape.height);
   const dropAt = dropHover(cursor, drop, shape.height);
   const onDrop = !!dropCall && !expanded && !drag.dragging && dropAt.over;
-  const dropState: DropState = expanded ? "merged" : dropAt.near && !drag.dragging ? "out" : "peek";
-  const dropProps = { state: dropState, top, islandLeft: drop.islandLeft, size: shape.height, reduced: moves.reduced };
+  const dropState: DropState = expanded ? "merged" : dropAt.near && !drag.dragging ? "out" : "rest";
+  const dropMotion = useDropMotion(dropState, drop.islandLeft, shape.height, moves.reduced);
   const liquid = prefs.call.style === "drop" && !moves.reduced;
 
   // Alt+Space: jump to the search tab. Clicking anywhere else closes it.
@@ -191,11 +191,21 @@ export function Island() {
   useHitRegion(ref);
 
   // Hover intent: open a beat after the pointer arrives, close a bit after it leaves.
-  // Hovering the drop opens the island on the call, and the drop flows into it.
   const inside = (cursor?.inside ?? false) || onDrop;
+
+  // With the drop on, where the pointer comes in picks the tab: from the
+  // drop's side (the drop itself or the island's left end) the call, from
+  // anywhere else the tab last opened by hand.
+  const chosenTab = useRef<TabId>(tab);
+  const fromDrop = useRef(false);
   useEffect(() => {
-    if (onDrop) setTab("call");
-  }, [onDrop]);
+    if (!inside || hovered) return;
+    fromDrop.current = onDrop || (!!cursor && cursor.x < drop.islandLeft + shape.height);
+    // Only the moment the pointer arrives counts.
+  }, [inside]);
+  useEffect(() => {
+    if (hovered && dropCall) setTab(fromDrop.current ? "call" : chosenTab.current);
+  }, [hovered]);
   useEffect(() => {
     if (inside === hovered) return;
     const t = setTimeout(() => setHovered(inside), inside ? shape.openDelay : shape.closeDelay);
@@ -332,17 +342,20 @@ export function Island() {
         // (without a glow of its own, or its ring would cut the neck).
         <>
           <motion.div ref={haloRef} className={`island island-halo${glow}`} {...twin(0)} />
-          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
           <div className="liquid">
             <LiquidFilter />
             {/* 1 px smaller: the filter grows shapes a little, which would cover the glow's ring. */}
             <motion.div className="island-ghost" {...twin(1)} />
-            <AnimatePresence>{dropCall && <CallDrop key="drop" layer="fill" {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+            <AnimatePresence>
+              {dropCall && <DropNeck key="neck" motion={dropMotion} top={top} islandLeft={drop.islandLeft} lean={{ x, y }} />}
+              {dropCall && <CallDrop key="drop" layer="fill" motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+            </AnimatePresence>
           </div>
         </>
       )}
       <AnimatePresence>
-        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} {...dropProps} lean={{ x, y }} voice={dropCall} />}
+        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
       </AnimatePresence>
       <motion.div
         ref={ref}
@@ -375,6 +388,7 @@ export function Island() {
                     aria-selected={tab === t.id}
                     onClick={() => {
                       setTab(t.id);
+                      chosenTab.current = t.id;
                       // Search keeps the island open; leaving it hands control
                       // back to hover, so the island can collapse again.
                       if (t.id === "launcher") launcher.open();
@@ -434,6 +448,8 @@ export function Island() {
             <motion.div
               key="collapsed"
               className="collapsed"
+              // Nudged aside while the call drop squeezes out of the left end.
+              style={{ x: liquid && dropCall ? dropMotion.push : 0 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: { delay: 0.1 } }}
               exit={{ opacity: 0, transition: { duration: 0.08 } }}

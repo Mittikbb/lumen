@@ -1,19 +1,23 @@
-import { MotionValue, motion } from "motion/react";
+import { useEffect, useRef } from "react";
+import { MotionValue, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { HEADPHONES } from "./CallPanel";
 import type { Voice } from "./useDiscord";
 
-/**
- * Gap between the popped-out drop and the island. Wider than the liquid
- * layer's reach (see LiquidFilter), so the drop separates once it's out.
- */
+/** Gap between the popped-out drop and the island. */
 const GAP = 14;
-/** How much of the resting drop shows from behind the island's left edge, and its size then. */
-const PEEK = 12;
-const PEEK_SCALE = 0.82;
+/**
+ * The neck holds until the drop is this far from the island, then snaps and
+ * the drop springs back to GAP: it takes a little pull to tear it off.
+ */
+const BREAK = 30;
+/** Neck at its thickest, as a share of the drop. */
+const NECK = 0.56;
+/** How far the island's left content gets nudged while the drop squeezes out. */
+const PUSH = 7;
 /** The pointer this close to the drop's centre makes it pop out. */
 const NEAR = 120;
 
-export type DropState = "peek" | "out" | "merged";
+export type DropState = "rest" | "out" | "merged";
 
 /** The drop's geometry for an island of `width` centred at `center`, top at `top`. */
 export function dropGeometry(center: number, top: number, width: number, size: number) {
@@ -52,55 +56,139 @@ export function LiquidFilter() {
   );
 }
 
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
 /**
- * "Капля": a Discord call as a round drop beside the island, like the second
- * activity on an iPhone. It peeks from behind the island's left edge, pops
- * out when the pointer comes close and flows into the island on hover.
- * It is drawn in layers (see Island.tsx): `halo` glows, `fill` is the plain
- * twin melted with the island in the liquid layer (the neck that stretches
- * and snaps between them), `face` shows who talks. `solid` is all in one, for
+ * The drop's motion, shared by all of its layers. At rest it hides inside the
+ * island's left end. Popping out, it squeezes through that edge (nudging the
+ * cover aside), drags a neck that thins as it stretches, tears off at BREAK
+ * and springs back to its spot; coming back the neck reforms and it melts in.
+ */
+export function useDropMotion(state: DropState, islandLeft: number, size: number, reduced: boolean) {
+  const restX = islandLeft + size * 0.15;
+  const outX = islandLeft - GAP - size;
+  const x = useMotionValue(restX);
+  const scale = useMotionValue(0.8);
+  const opacity = useMotionValue(1);
+  const face = useMotionValue(0);
+  const neck = useMotionValue(0);
+  const attached = useRef(true);
+  const left = useRef(islandLeft);
+  left.current = islandLeft;
+
+  // The neck and the face follow where the drop is.
+  useEffect(
+    () =>
+      x.on("change", (v) => {
+        // Gap between the drop's right edge (its scale origin) and the island.
+        const gap = left.current - (v + size);
+        if (attached.current && gap > BREAK) {
+          attached.current = false;
+          animate(neck, 0, { duration: reduced ? 0 : 0.09, ease: "easeIn" }); // snap
+        } else if (!attached.current && gap < 2) {
+          attached.current = true;
+        }
+        if (attached.current) {
+          // Grows as the drop squeezes through the edge, thins as it stretches.
+          const through = clamp01((gap + size * 0.7) / (size * 0.7));
+          const stretch = Math.sqrt(clamp01(1 - gap / BREAK));
+          neck.set(size * NECK * Math.min(through, stretch));
+        }
+        face.set(clamp01((gap + size * 0.35) / (size * 0.45)));
+      }),
+    [x, neck, face, size, reduced],
+  );
+
+  useEffect(() => {
+    const instant = { duration: 0 };
+    const settle = { type: "spring", stiffness: 300, damping: 24 } as const;
+    const running =
+      state === "out"
+        ? [
+            attached.current && !reduced
+              ? // Pulled against the neck, slowing as it stretches, then torn
+                // free and bouncing back to its spot.
+                animate(x, [x.get(), islandLeft - BREAK - 2 - size, outX], {
+                  duration: 0.7,
+                  times: [0, 0.68, 1],
+                  ease: ["easeOut", "backOut"],
+                })
+              : animate(x, outX, reduced ? instant : settle),
+            animate(scale, 1, reduced ? instant : settle),
+            animate(opacity, 1, instant),
+          ]
+        : [
+            animate(x, state === "merged" ? islandLeft + size / 2 : restX, reduced ? instant : settle),
+            animate(scale, state === "merged" ? 0.4 : 0.8, reduced ? instant : settle),
+            animate(opacity, state === "merged" ? 0 : 1, reduced ? instant : { duration: 0.25 }),
+          ];
+    return () => running.forEach((a) => a.stop());
+  }, [state, islandLeft, size, reduced, x, scale, opacity, outX, restX]);
+
+  // The cover nudged aside while the drop squeezes out, gliding back after.
+  const push = useSpring(useTransform(neck, [0, size * NECK], [0, PUSH]), { stiffness: 400, damping: 30 });
+
+  return { x, scale, opacity, face, neck, push, size };
+}
+
+export type DropMotion = ReturnType<typeof useDropMotion>;
+
+type Lean = { x: MotionValue<number>; y: MotionValue<number> };
+
+/**
+ * "Капля": a Discord call as a round drop that flows out of the island's left
+ * end, like the second activity on an iPhone. It is drawn in layers (see
+ * Island.tsx): `halo` glows, `fill` is the plain twin melted with the island
+ * in the liquid layer, `face` shows who talks. `solid` is all in one, for
  * reduced motion, where there is no liquid layer.
  */
-export function CallDrop({ voice, state, top, islandLeft, size, lean, reduced, layer }: {
+export function CallDrop({ voice, motion: m, top, lean, layer }: {
   voice: Voice;
-  state: DropState;
+  motion: DropMotion;
   top: number;
-  islandLeft: number;
-  size: number;
   /** The island's lean toward the pointer; the drop sways along, keeping its gap. */
-  lean: { x: MotionValue<number>; y: MotionValue<number> };
-  reduced: boolean;
+  lean: Lean;
   layer: "halo" | "fill" | "face" | "solid";
 }) {
-  const speaker = voice.members.find((m) => m.speaking);
-  const x =
-    state === "out"
-      ? islandLeft - GAP - size
-      : state === "peek"
-        ? // Scaled from its right edge, so shift by what the scale takes off.
-          islandLeft - PEEK - (1 - PEEK_SCALE) * size
-        : islandLeft + size / 2;
+  const speaker = voice.members.find((member) => member.speaking);
+  const showsFace = layer === "face" || layer === "solid";
   return (
-    <motion.div className="call-drop-lean" style={{ x: lean.x, y: lean.y }}>
+    <motion.div className="call-drop-lean" style={{ x: lean.x, y: lean.y }} exit={{ opacity: 0 }}>
       <motion.div
         className={`call-drop ${layer}${speaker ? " speaking" : ""}`}
-        style={{ top, width: size, height: size, originX: 1 }}
-        // A call started: the drop flows out of the island.
-        initial={{ x: islandLeft, scale: 0, opacity: 0 }}
-        animate={{
-          x,
-          scale: state === "out" ? 1 : state === "peek" ? PEEK_SCALE : 0.4,
-          // At rest only the shape peeks out; who talks shows once it pops out.
-          opacity: state === "merged" || (layer === "face" && state === "peek") ? 0 : 1,
+        style={{
+          top,
+          width: m.size,
+          height: m.size,
+          originX: 1,
+          x: m.x,
+          scale: m.scale,
+          opacity: layer === "face" ? m.face : m.opacity,
         }}
-        // The call ended: the drop shrinks back into the island.
-        exit={{ x: islandLeft, scale: 0, opacity: 0 }}
-        // A soft spring with a little wobble, like a drop settling.
-        transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 19, mass: 1 }}
         aria-hidden
       >
-        {(layer === "face" || layer === "solid") && (speaker ? <img src={speaker.avatar} alt="" draggable={false} /> : HEADPHONES)}
+        {showsFace && (speaker ? <img src={speaker.avatar} alt="" draggable={false} /> : HEADPHONES)}
       </motion.div>
+    </motion.div>
+  );
+}
+
+/** The neck between the drop and the island, in the liquid layer. */
+export function DropNeck({ motion: m, top, islandLeft, lean }: {
+  motion: DropMotion;
+  top: number;
+  islandLeft: number;
+  lean: Lean;
+}) {
+  const at = useRef({ top, islandLeft });
+  at.current = { top, islandLeft };
+  // From the drop's centre into the island's rounded end.
+  const left = useTransform(m.x, (x) => x + m.size / 2);
+  const width = useTransform(m.x, (x) => Math.max(0, at.current.islandLeft + m.size * 0.3 - x - m.size / 2));
+  const y = useTransform(m.neck, (n) => at.current.top + (m.size - n) / 2);
+  return (
+    <motion.div className="call-drop-lean" style={{ x: lean.x, y: lean.y }} exit={{ opacity: 0 }}>
+      <motion.div className="drop-neck" style={{ left, top: y, width, height: m.neck }} />
     </motion.div>
   );
 }
