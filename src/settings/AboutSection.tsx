@@ -19,7 +19,6 @@ interface UpdateInfo {
   latest: string;
   available: boolean;
   url: string;
-  download: string | null;
   notes: string;
 }
 
@@ -28,20 +27,24 @@ const open = (url: string) => (isTauri ? openUrl(url) : window.open(url, "_blank
 /** О Lumen: version, update check and links. */
 export function AboutSection({ settings }: { settings: Settings }) {
   const [version, setVersion] = useState<string | null>(null);
-  const { info, checking, error, check } = useUpdate();
+  const { info, checking, error, check, install, installing } = useUpdate();
   useEffect(() => {
     if (isTauri) getVersion().then(setVersion);
   }, []);
 
-  const status = checking
-    ? "Проверяю…"
-    : error
-      ? error
-      : !info
-        ? "Ещё не проверялось"
-        : info.available
-          ? `У тебя ${info.current} — скачай установщик и запусти его`
-          : "Установлена последняя версия";
+  const status = installing
+    ? installing.total
+      ? `Скачиваю… ${Math.round((installing.downloaded / installing.total) * 100)}%`
+      : "Скачиваю…"
+    : checking
+      ? "Проверяю…"
+      : error
+        ? error
+        : !info
+          ? "Ещё не проверялось"
+          : info.available
+            ? `У тебя ${info.current}. Обновится и перезапустится само, настройки сохранятся`
+            : "Установлена последняя версия";
 
   return (
     <>
@@ -66,8 +69,8 @@ export function AboutSection({ settings }: { settings: Settings }) {
                 <button className="st-button quiet" onClick={() => open(info.url)}>
                   Что нового
                 </button>
-                <button className="st-button primary" onClick={() => open(info.download ?? info.url)}>
-                  Скачать
+                <button className="st-button primary" disabled={!!installing} onClick={install}>
+                  Обновить
                 </button>
               </>
             )}
@@ -81,6 +84,11 @@ export function AboutSection({ settings }: { settings: Settings }) {
         <Row title="Проверять автоматически" hint="При запуске и раз в несколько часов; о новой версии скажет остров">
           <Toggle on={settings.updates.auto} onChange={(auto) => updateSettings({ updates: { auto } })} />
         </Row>
+        {settings.updates.auto && (
+          <Row title="Ставить обновления сами" hint="Сразу после запуска Lumen, пока ты ещё ничего не делаешь">
+            <Toggle on={settings.updates.install} onChange={(install) => updateSettings({ updates: { install } })} />
+          </Row>
+        )}
       </div>
 
       <Heading>Авторы</Heading>
@@ -127,5 +135,27 @@ function useUpdate() {
       .finally(() => setChecking(false));
   };
 
-  return { info, checking, error, check };
+  // Download progress while updating; the installer then closes Lumen and
+  // starts the new version, so success never comes back here.
+  const [installing, setInstalling] = useState<{ downloaded: number; total: number | null } | null>(null);
+  useEffect(() => {
+    if (!isTauri) return;
+    const unlisten = listen<{ downloaded: number; total: number | null }>("lumen://update-progress", (e) =>
+      setInstalling(e.payload),
+    );
+    return () => {
+      unlisten.then((off) => off());
+    };
+  }, []);
+  const install = () => {
+    if (!isTauri) return;
+    setError(null);
+    setInstalling({ downloaded: 0, total: null });
+    invoke("update_install").catch((e) => {
+      setInstalling(null);
+      setError(String(e));
+    });
+  };
+
+  return { info, checking, error, check, install, installing };
 }

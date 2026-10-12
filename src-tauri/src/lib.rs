@@ -29,6 +29,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(overlay::HitRegion::default())
         .manage(overlay::Focus::default())
         .manage(overlay::AnchorState::default())
@@ -94,6 +95,7 @@ pub fn run() {
             discord::discord_forget,
             updates::update_check,
             updates::update_last,
+            updates::update_install,
             hotkeys::hotkeys_suspend,
             hotkeys::hotkeys_busy,
         ])

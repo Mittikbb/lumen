@@ -119,11 +119,16 @@ impl Default for ShelfPrefs {
 pub struct UpdatePrefs {
     /// Look for a new release in the background and announce it.
     pub auto: bool,
+    /// Install a found update by itself right after start.
+    pub install: bool,
 }
 
 impl Default for UpdatePrefs {
     fn default() -> Self {
-        Self { auto: true }
+        Self {
+            auto: true,
+            install: true,
+        }
     }
 }
 

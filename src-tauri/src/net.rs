@@ -18,7 +18,7 @@ pub fn agent() -> ureq::Agent {
     builder.build()
 }
 
-fn system_proxy() -> Option<String> {
+pub fn system_proxy() -> Option<String> {
     for var in ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"] {
         if let Ok(value) = std::env::var(var) {
             if !value.trim().is_empty() {

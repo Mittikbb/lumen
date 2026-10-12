@@ -149,7 +149,8 @@ export interface Settings {
   weather: WeatherPrefs;
   search: { engine: SearchEngine };
   discord: DiscordPrefs;
-  updates: { auto: boolean };
+  /** `install`: put a found update in by itself right after start. */
+  updates: { auto: boolean; install: boolean };
   media: MediaPrefs;
 }
 
@@ -191,7 +192,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },
   search: { engine: "google" },
   discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true },
-  updates: { auto: true },
+  updates: { auto: true, install: true },
   media: { volumeSlider: true },
 };
 

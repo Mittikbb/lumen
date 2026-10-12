@@ -1,16 +1,21 @@
-//! Update check: compares this build with the latest GitHub release, on demand
-//! from the settings and in the background (shortly after start, then every
-//! few hours), and tells the island once when a newer version is out.
+//! Updates through the Tauri updater: the latest release carries a signed
+//! manifest (latest.json), checked on demand from the settings and in the
+//! background (shortly after start, then every few hours). A new version is
+//! installed in one go — download, check the signature, run the installer
+//! with just a progress bar, start again — from the settings at any time, or
+//! by itself at start if the user allows. Mid-session the island only says
+//! it's out, so Lumen never restarts under the user's hands.
 
 use std::{sync::Mutex, thread, time::Duration};
 
 use serde::Serialize;
-use serde_json::{Value, json};
-use tauri::{AppHandle, Emitter, Manager, State};
+use serde_json::json;
+use tauri::{AppHandle, Emitter, Manager, State, Url};
+use tauri_plugin_updater::{Update, Updater, UpdaterExt};
 
 use crate::{net, settings};
 
-const LATEST_URL: &str = "https://api.github.com/repos/Mittikbb/lumen/releases/latest";
+const RELEASE_PAGE: &str = "https://github.com/Mittikbb/lumen/releases/tag/v";
 const FIRST_CHECK: Duration = Duration::from_secs(20);
 const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
@@ -22,8 +27,6 @@ pub struct UpdateInfo {
     available: bool,
     /// Release page with the notes.
     url: String,
-    /// The installer, when the release has one.
-    download: Option<String>,
     notes: String,
 }
 
@@ -34,13 +37,10 @@ pub struct Updates {
     announced: Mutex<Option<String>>,
 }
 
-/// Checks right now. Async so the network wait stays off the UI thread.
+/// Checks right now.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> Result<UpdateInfo, String> {
-    let handle = app.clone();
-    tauri::async_runtime::spawn_blocking(move || check(&handle))
-        .await
-        .map_err(|e| e.to_string())?
+    find(&app).await.map(|(info, _)| info)
 }
 
 /// The result of the last check, if any.
@@ -49,62 +49,89 @@ pub fn update_last(updates: State<Updates>) -> Option<UpdateInfo> {
     updates.last.lock().unwrap().clone()
 }
 
+/// Installs the latest version now and starts it.
+#[tauri::command]
+pub async fn update_install(app: AppHandle) -> Result<(), String> {
+    let (_, update) = find(&app).await?;
+    install(&app, update.ok_or("Уже стоит последняя версия")?).await
+}
+
 pub fn spawn_checker(app: AppHandle) {
     thread::spawn(move || {
         thread::sleep(FIRST_CHECK);
+        let mut at_start = true;
         loop {
-            if settings::get(&app).updates.auto {
-                if let Ok(info) = check(&app) {
-                    announce(&app, &info);
+            let prefs = settings::get(&app).updates;
+            if prefs.auto
+                && let Ok((info, update)) = tauri::async_runtime::block_on(find(&app))
+            {
+                // Right after start nothing is going on yet: a good moment to
+                // update by itself. Dev builds never replace themselves.
+                match update {
+                    Some(update) if at_start && prefs.install && !cfg!(debug_assertions) => {
+                        let _ = tauri::async_runtime::block_on(install(&app, update));
+                    }
+                    _ => announce(&app, &info, prefs.install),
                 }
             }
+            at_start = false;
             thread::sleep(EVERY);
         }
     });
 }
 
-fn check(app: &AppHandle) -> Result<UpdateInfo, String> {
-    let release: Value = net::agent()
-        .get(LATEST_URL)
-        .set("User-Agent", "Lumen")
-        .set("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(|e| format!("Не удалось проверить обновления: {e}"))?
-        .into_json()
-        .map_err(|e| e.to_string())?;
+/// The updater, through the same proxy as the rest of Lumen's traffic.
+fn updater(app: &AppHandle) -> Result<Updater, String> {
+    let mut builder = app.updater_builder();
+    // Dev builds can be pointed at a test manifest.
+    let test = std::env::var("LUMEN_UPDATE_URL").ok().filter(|_| cfg!(debug_assertions));
+    if let Some(url) = test.and_then(|u| u.parse::<Url>().ok()) {
+        builder = builder.endpoints(vec![url]).map_err(|e| e.to_string())?;
+    } else if let Some(proxy) = net::system_proxy().and_then(|p| p.parse::<Url>().ok()) {
+        builder = builder.proxy(proxy);
+    }
+    builder.build().map_err(|e| e.to_string())
+}
 
+async fn find(app: &AppHandle) -> Result<(UpdateInfo, Option<Update>), String> {
+    let update = updater(app)?
+        .check()
+        .await
+        .map_err(|e| format!("Не удалось проверить обновления: {e}"))?;
     let current = app.package_info().version.to_string();
-    let latest = release["tag_name"]
-        .as_str()
-        .ok_or("GitHub не вернул версию")?
-        .trim_start_matches('v')
-        .to_string();
-    let download = release["assets"].as_array().and_then(|assets| {
-        assets
-            .iter()
-            .find(|a| {
-                a["name"]
-                    .as_str()
-                    .is_some_and(|n| n.ends_with("-setup.exe"))
-            })
-            .and_then(|a| a["browser_download_url"].as_str())
-            .map(String::from)
-    });
+    let latest = update.as_ref().map_or_else(|| current.clone(), |u| u.version.clone());
     let info = UpdateInfo {
-        available: newer(&latest, &current),
-        url: release["html_url"].as_str().unwrap_or_default().into(),
-        notes: release["body"].as_str().unwrap_or_default().into(),
-        download,
+        available: update.is_some(),
+        url: format!("{RELEASE_PAGE}{latest}"),
+        notes: update.as_ref().and_then(|u| u.body.clone()).unwrap_or_default(),
         current,
         latest,
     };
     *app.state::<Updates>().last.lock().unwrap() = Some(info.clone());
     let _ = app.emit("lumen://update", &info);
-    Ok(info)
+    Ok((info, update))
+}
+
+/// Downloads with progress for the settings, installs and starts again. On
+/// Windows the installer takes over and closes Lumen itself.
+async fn install(app: &AppHandle, update: Update) -> Result<(), String> {
+    let progress = app.clone();
+    let mut downloaded = 0;
+    update
+        .download_and_install(
+            move |chunk, total| {
+                downloaded += chunk;
+                let _ = progress.emit("lumen://update-progress", json!({ "downloaded": downloaded, "total": total }));
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| format!("Не удалось обновить: {e}"))?;
+    app.restart()
 }
 
 /// A one-time notice on the island per new version.
-fn announce(app: &AppHandle, info: &UpdateInfo) {
+fn announce(app: &AppHandle, info: &UpdateInfo, installs: bool) {
     if !info.available {
         return;
     }
@@ -118,31 +145,8 @@ fn announce(app: &AppHandle, info: &UpdateInfo) {
         "lumen://notice",
         json!({
             "title": format!("Вышел Lumen {}", info.latest),
-            "detail": "скачать в настройках",
+            "detail": if installs { "встанет при следующем запуске" } else { "обновить в настройках" },
             "kind": "update",
         }),
     );
-}
-
-/// Whether version `a` ("0.4.2") is newer than `b`.
-fn newer(a: &str, b: &str) -> bool {
-    let parse = |v: &str| -> Vec<u64> {
-        v.split(['.', '-'])
-            .map_while(|part| part.parse().ok())
-            .collect()
-    };
-    parse(a) > parse(b)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::newer;
-
-    #[test]
-    fn compares_versions() {
-        assert!(newer("0.4.1", "0.4.0"));
-        assert!(newer("0.10.0", "0.9.9"));
-        assert!(!newer("0.4.0", "0.4.0"));
-        assert!(!newer("0.3.0", "0.4.1"));
-    }
 }
