@@ -45,7 +45,7 @@ export interface IslandPrefs {
 }
 
 /** How a Discord call shows while the island is collapsed. */
-export type CallStyle = "classic" | "right";
+export type CallStyle = "classic" | "right" | "drop";
 
 /** What the collapsed island shows at rest. */
 export interface CollapsedPrefs {

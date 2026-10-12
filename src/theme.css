@@ -1503,6 +1503,44 @@ html.capture-root #root {
   height: 15px;
 }
 
+/* "Капля": the call as a round drop left of the island, painted under it. */
+.call-drop {
+  position: absolute;
+  left: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--island-bg);
+  color: var(--island-fg-muted);
+  pointer-events: none;
+  animation: glow 3.2s ease-in-out infinite;
+}
+
+.call-drop img {
+  width: 72%;
+  height: 72%;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.15s;
+}
+
+.call-drop.speaking img {
+  box-shadow:
+    0 0 0 2px #3ba55d,
+    0 0 10px 2px rgba(59, 165, 93, 0.55);
+}
+
+.call-drop svg {
+  width: 45%;
+  height: 45%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* "Имя говорящего справа": the speaker's name moves to the right edge. */
 .mini-call.speaker-right .mini-title {
   text-align: right;

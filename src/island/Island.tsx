@@ -26,6 +26,7 @@ import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MiniCall } from "../discord/CallPanel";
+import { CallDrop, DropState, dropGeometry, dropHover } from "../discord/CallDrop";
 import type { MotionPrefs } from "../settings/useSettings";
 
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
@@ -122,8 +123,8 @@ export function Island() {
     (t) => t.id === "launcher" || (!hidden.includes(t.id) && (t.id !== "call" || !!voice)),
   );
   const showsTab = (id: TabId) => tabs.some((t) => t.id === id);
-  // A call in the collapsed island itself.
-  const miniCall = !!voice && showsTab("call");
+  // A call in the collapsed island itself; the "drop" style keeps it outside.
+  const miniCall = !!voice && showsTab("call") && prefs.call.style !== "drop";
   const [notice, setNotice] = useState<{
     title: string;
     detail: string;
@@ -160,6 +161,21 @@ export function Island() {
   // A dragged island stays collapsed so it's easy to place.
   const expanded = (hovered && !drag.dragging) || launcherOpen || dropping;
 
+  // Collapsed size: wider for a notice or a call shown inside the island.
+  const collapsedSize = {
+    width: notice ? Math.max(NOTICE_WIDTH, shape.width + 70) : miniCall ? Math.max(shape.width, 250) : shape.width,
+    height: shape.height,
+  };
+
+  // "Капля" call style: the call lives in a drop beside the island.
+  const center = anchor ? anchor.x : window.innerWidth / 2;
+  const top = anchor ? anchor.y : shape.offsetTop;
+  const dropCall = voice && showsTab("call") && prefs.call.style === "drop" ? voice : null;
+  const drop = dropGeometry(center, top, collapsedSize.width, shape.height);
+  const dropAt = dropHover(cursor, drop, shape.height);
+  const onDrop = !!dropCall && !expanded && !drag.dragging && dropAt.over;
+  const dropState: DropState = expanded ? "merged" : dropAt.near && !drag.dragging ? "out" : "peek";
+
   // Alt+Space: jump to the search tab. Clicking anywhere else closes it.
   useEffect(() => {
     if (!launcherOpen) return;
@@ -172,7 +188,11 @@ export function Island() {
   useHitRegion(ref);
 
   // Hover intent: open a beat after the pointer arrives, close a bit after it leaves.
-  const inside = cursor?.inside ?? false;
+  // Hovering the drop opens the island on the call, and the drop flows into it.
+  const inside = (cursor?.inside ?? false) || onDrop;
+  useEffect(() => {
+    if (onDrop) setTab("call");
+  }, [onDrop]);
   useEffect(() => {
     if (inside === hovered) return;
     const t = setTimeout(() => setHovered(inside), inside ? shape.openDelay : shape.closeDelay);
@@ -266,18 +286,13 @@ export function Island() {
     });
   });
 
-  const collapsedSize = { width: shape.width, height: shape.height };
   const size = expanded
     ? {
         // The extra "Звонок" tab needs room, or the clock gets cut off.
         width: shape.expandedWidth + (showsTab("call") ? CALL_TAB_WIDTH : 0),
         height: EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT,
       }
-    : notice
-      ? { ...collapsedSize, width: Math.max(NOTICE_WIDTH, shape.width + 70) }
-      : miniCall
-        ? { ...collapsedSize, width: Math.max(collapsedSize.width, 250) }
-        : collapsedSize;
+    : collapsedSize;
   const fade = (px: number) => (blur ? `blur(${px}px)` : "blur(0px)");
 
   // A dragged island is centred on its anchor: uneven side padding shifts
@@ -292,6 +307,19 @@ export function Island() {
 
   return (
     <div className="stage" style={stage}>
+      <AnimatePresence>
+        {dropCall && (
+          <CallDrop
+            key="drop"
+            voice={dropCall}
+            state={dropState}
+            top={top}
+            islandLeft={drop.islandLeft}
+            size={shape.height}
+            reduced={moves.reduced}
+          />
+        )}
+      </AnimatePresence>
       <motion.div
         ref={ref}
         {...drag.handlers}

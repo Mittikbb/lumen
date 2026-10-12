@@ -10,6 +10,7 @@ const PORTAL_URL = "https://discord.com/developers/applications";
 const CALL_STYLES: { id: CallStyle; label: string }[] = [
   { id: "classic", label: "Аватары и имя" },
   { id: "right", label: "Имя говорящего справа" },
+  { id: "drop", label: "Капля слева от острова" },
 ];
 
 const STATES: Record<string, { label: string; tone: "ok" | "wait" | "bad" | "off" }> = {
