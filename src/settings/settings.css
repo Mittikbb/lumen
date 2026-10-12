@@ -758,6 +758,12 @@ html.settings-root #root {
     0 0 12px 2px rgba(242, 92, 84, 0.55);
 }
 
+.st-preset-preview.flow i {
+  box-shadow:
+    -9px 0 12px 1px rgba(247, 178, 103, 0.55),
+    9px 0 12px 1px rgba(242, 92, 84, 0.6);
+}
+
 .st-preset-preview.minimal i {
   width: 56px;
   height: 14px;

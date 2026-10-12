@@ -2,8 +2,8 @@ import { DEFAULT_SETTINGS, Settings, SettingsPatch } from "./useSettings";
 
 /**
  * Island presets: each sets the whole feel at once (look, shape, what the
- * collapsed island shows, motion and notices). Only "Свечение" is filled in
- * so far; the rest are placeholders shown as "скоро".
+ * collapsed island shows, motion and notices). "Свечение" and "Перелив" are
+ * filled in so far; the rest are placeholders shown as "скоро".
  */
 export interface Preset {
   id: string;
@@ -24,6 +24,13 @@ export const PRESETS: Preset[] = [
     description: "Тёплое свечение, пульс в такт музыке, мягкая форма",
     patch: { look, island, collapsed, motion, notices },
     preview: "glow",
+  },
+  {
+    id: "flow",
+    name: "Перелив",
+    description: "Цвета свечения переливаются вдоль капсулы",
+    patch: { look: { ...look, style: "flow" }, island, collapsed, motion, notices },
+    preview: "flow",
   },
   {
     id: "minimal",

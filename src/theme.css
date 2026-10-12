@@ -53,9 +53,15 @@ body,
   -webkit-font-smoothing: antialiased;
 }
 
+/* Fills the window: it moves as a whole when shown and hidden, and its
+   transform makes it the box the layers (halo, liquid) are placed in. */
 .stage {
+  position: relative;
+  box-sizing: border-box;
   display: flex;
+  align-items: flex-start;
   justify-content: center;
+  height: 100%;
   padding-top: 12px;
 }
 
@@ -90,6 +96,86 @@ body,
       color-mix(in srgb, var(--glow-b) min(100%, (35% + 50% * var(--beat)) * var(--glow-k)), transparent),
     0 0 calc((36px + 40px * var(--beat)) * var(--glow-r)) calc((4px + 12px * var(--beat)) * var(--glow-r))
       color-mix(in srgb, var(--glow-a) min(100%, (14% + 26% * var(--beat)) * var(--glow-k)), transparent);
+}
+
+/* "Перелив": the glow's two colours run sideways along the capsule, over a
+   blurred band of them behind it (.island-flow). */
+.island.flow,
+.stage.flow .drop-body.halo {
+  animation: flow 3.6s ease-in-out infinite;
+}
+
+.island.flow.is-playing {
+  animation-duration: 1.8s;
+}
+
+/* With live audio the colours spread sideways with the kick drum. */
+.island.flow.reactive {
+  animation: none;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--glow-a) min(100%, (18% + 30% * var(--beat)) * var(--glow-k)), transparent),
+    calc((-16px - 14px * var(--beat)) * var(--glow-r)) 0 calc((18px + 12px * var(--beat)) * var(--glow-r))
+      calc((2px + 4px * var(--beat)) * var(--glow-r))
+      color-mix(in srgb, var(--glow-a) min(100%, (35% + 45% * var(--beat)) * var(--glow-k)), transparent),
+    calc((16px + 14px * var(--beat)) * var(--glow-r)) 0 calc((22px + 16px * var(--beat)) * var(--glow-r))
+      calc((2px + 5px * var(--beat)) * var(--glow-r))
+      color-mix(in srgb, var(--glow-b) min(100%, (35% + 45% * var(--beat)) * var(--glow-k)), transparent);
+}
+
+@keyframes flow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--glow-a) calc(20% * var(--glow-k)), transparent),
+      calc(-18px * var(--glow-r)) 0 calc(20px * var(--glow-r)) calc(2px * var(--glow-r))
+        color-mix(in srgb, var(--glow-a) calc(50% * var(--glow-k)), transparent),
+      calc(18px * var(--glow-r)) 0 calc(22px * var(--glow-r)) calc(2px * var(--glow-r))
+        color-mix(in srgb, var(--glow-b) calc(45% * var(--glow-k)), transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--glow-b) calc(22% * var(--glow-k)), transparent),
+      calc(18px * var(--glow-r)) 0 calc(22px * var(--glow-r)) calc(2px * var(--glow-r))
+        color-mix(in srgb, var(--glow-a) calc(45% * var(--glow-k)), transparent),
+      calc(-18px * var(--glow-r)) 0 calc(20px * var(--glow-r)) calc(2px * var(--glow-r))
+        color-mix(in srgb, var(--glow-b) calc(50% * var(--glow-k)), transparent);
+  }
+}
+
+.island-flow {
+  position: absolute;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--glow-a) calc(85% * var(--glow-k)), transparent),
+    color-mix(in srgb, var(--glow-b) calc(90% * var(--glow-k)), transparent),
+    color-mix(in srgb, var(--glow-a) calc(85% * var(--glow-k)), transparent)
+  );
+  background-size: 200% 100%;
+  filter: blur(calc(22px * var(--glow-r)));
+  opacity: calc(0.75 * var(--glow-k));
+  animation: flow-band 3.6s linear infinite;
+}
+
+.island-flow.is-playing {
+  animation-duration: 1.8s;
+}
+
+.island-flow.reactive {
+  opacity: calc((0.45 + 0.55 * var(--beat)) * var(--glow-k));
+}
+
+.island-flow.reduced {
+  animation: none;
+}
+
+@keyframes flow-band {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
 }
 
 @keyframes glow {
@@ -1107,6 +1193,11 @@ body,
 
 /* Copy feedback: glow flash plus a light sweeping across the capsule */
 .island.copied {
+  animation: copied 0.7s ease-out;
+}
+
+.island.flow.copied,
+.island.flow.reactive.copied {
   animation: copied 0.7s ease-out;
 }
 

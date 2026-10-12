@@ -17,8 +17,12 @@ export interface Hotkeys {
   text: string;
 }
 
+/** "glow" breathes around the capsule; "flow" ("Перелив") runs its colours sideways along it. */
+export type GlowStyle = "glow" | "flow";
+
 export interface Look {
   glow: GlowLevel;
+  style: GlowStyle;
   /** Glow palette when there's no album art to take colours from. */
   accent: Accent;
   /** Tint the glow with the album art of the playing track. */
@@ -164,7 +168,7 @@ export const DEFAULT_SETTINGS: Settings = {
   browser: null,
   hiddenTabs: [],
   city: null,
-  look: { glow: "normal", accent: "sunset", artColors: true, beat: true, lean: true },
+  look: { glow: "normal", style: "glow", accent: "sunset", artColors: true, beat: true, lean: true },
   island: {
     width: 220,
     height: 40,

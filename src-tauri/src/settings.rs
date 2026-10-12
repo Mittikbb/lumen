@@ -191,6 +191,8 @@ pub struct City {
 pub struct Look {
     /// "off", "soft", "normal" or "bright".
     glow: String,
+    /// "glow" breathes around the island, "flow" ("Перелив") runs along it.
+    style: String,
     /// Glow palette when there's no album art to take colours from.
     accent: String,
     /// Tint the glow with the album art of the playing track.
@@ -205,6 +207,7 @@ impl Default for Look {
     fn default() -> Self {
         Self {
             glow: "normal".into(),
+            style: "glow".into(),
             accent: "sunset".into(),
             art_colors: true,
             beat: true,

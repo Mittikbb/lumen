@@ -128,6 +128,7 @@ export function Island() {
   const reactive = useAudioLevels() && !!media?.playing && look?.beat !== false;
   const track = media ? trackKey(media) : "";
   const [hovered, setHovered] = useState(false);
+  const visible = useVisibility();
   const [tab, setTab] = useState<TabId>("media");
   const clips = useClipboard();
   const launcherOpen = useLauncherOpen();
@@ -379,7 +380,8 @@ export function Island() {
       }
     : { paddingTop: shape.offsetTop };
 
-  const glow = `${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}`;
+  const flow = look?.style === "flow";
+  const glow = `${flow ? " flow" : ""}${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}`;
   // A twin that moves exactly like the island, `inset` px smaller all round.
   const twin = (inset: number) => ({
     initial: false as const,
@@ -393,8 +395,28 @@ export function Island() {
     style: { top: top + inset, x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" },
   });
 
+  // Shown and hidden with a spring: it drops in from above the screen's edge
+  // and flies back up, shrinking and blurring (see spawn_fullscreen_watch).
+  const away = { y: -(top + size.height + 30), scale: 0.88, opacity: 0, filter: fade(8) };
+  const here = { y: 0, scale: 1, opacity: 1, filter: "none" };
+  const visibility = moves.reduced
+    ? { duration: 0 }
+    : visible
+      ? ({ type: "spring", stiffness: 340 * SPEED[moves.speed], damping: DAMPING[moves.bounce], mass: 0.85 } as const)
+      : ({ type: "spring", stiffness: 420 * SPEED[moves.speed], damping: 34, mass: 0.7 } as const);
+
   return (
-    <div className="stage" style={stage}>
+    <motion.div
+      className={`stage${flow ? " flow" : ""}`}
+      style={{ ...stage, transformOrigin: `${center}px ${top}px` }}
+      initial={away}
+      animate={visible ? here : away}
+      transition={visibility}
+    >
+      {flow && (
+        // "Перелив": a band of the glow's colours running sideways behind the island.
+        <motion.div className={`island-flow${glow}`} {...twin(0)} />
+      )}
       {liquid && (
         // The drops need one liquid shape with the island, so it is drawn in
         // layers: the glow, then the fill of island, necks and drops melted
@@ -598,7 +620,7 @@ export function Island() {
           )}
         </AnimatePresence>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -611,4 +633,20 @@ function useLingering<T>(value: T | null, ms: number): T | null {
     return () => clearTimeout(t);
   }, [value, ms]);
   return value ?? kept;
+}
+
+/**
+ * Whether the island is shown: the backend hides it behind fullscreen (or
+ * maximized) windows, telling it first so it can animate away.
+ */
+function useVisibility() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    if (!isTauri) return;
+    const unlisten = listen<boolean>("lumen://visibility", (e) => setVisible(e.payload));
+    return () => {
+      unlisten.then((off) => off());
+    };
+  }, []);
+  return visible;
 }

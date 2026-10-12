@@ -2,12 +2,17 @@ import { useClock } from "../island/useClock";
 import { Heading, Row, Segmented, Toggle } from "./controls";
 import { ACCENTS, GLOW_LEVELS } from "./look";
 import { isActive, PRESETS } from "./presets";
-import { Accent, Bounce, GlowLevel, Look, MotionPrefs, Settings, Speed, updateSettings } from "./useSettings";
+import { Accent, Bounce, GlowLevel, GlowStyle, Look, MotionPrefs, Settings, Speed, updateSettings } from "./useSettings";
 
 const SPEEDS: { value: Speed; label: string }[] = [
   { value: "slow", label: "Медленно" },
   { value: "normal", label: "Обычно" },
   { value: "fast", label: "Быстро" },
+];
+
+const STYLES: { value: GlowStyle; label: string }[] = [
+  { value: "glow", label: "Свечение" },
+  { value: "flow", label: "Перелив" },
 ];
 
 const BOUNCES: { value: Bounce; label: string }[] = [
@@ -49,7 +54,7 @@ export function LookSection({ settings }: { settings: Settings }) {
 
       <Heading>Свечение и цвет</Heading>
       <div className="st-preview">
-        <div className={`island st-preview-island${motion.reduced ? " reduced" : ""}`}>
+        <div className={`island st-preview-island${look.style === "flow" ? " flow" : ""}${motion.reduced ? " reduced" : ""}`}>
           <span className="orb" />
           <span className="clock">{time}</span>
         </div>
@@ -62,6 +67,9 @@ export function LookSection({ settings }: { settings: Settings }) {
             options={(Object.keys(GLOW_LEVELS) as GlowLevel[]).map((value) => ({ value, label: GLOW_LEVELS[value].label }))}
             onChange={(glow) => set({ glow })}
           />
+        </Row>
+        <Row title="Стиль" hint="Перелив — цвета бегут вдоль капсулы">
+          <Segmented value={look.style} options={STYLES} onChange={(style) => set({ style })} />
         </Row>
         <Row title="Цвет" hint={ACCENTS[look.accent]?.label}>
           <div className="st-swatches" role="radiogroup">

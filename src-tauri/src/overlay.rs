@@ -374,6 +374,9 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
     });
 }
 
+/// How long the island's exit animation gets before its window is hidden.
+const HIDE_ANIMATION: Duration = Duration::from_millis(320);
+
 /// Hides the island while a fullscreen app (a game, a video) or, if asked, a
 /// maximized window is in front on its monitor, and brings it back afterwards.
 pub fn spawn_fullscreen_watch(app: AppHandle) {
@@ -394,7 +397,16 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
                     || (display.hide_maximized && cover.maximized)
             };
             if hide != hidden {
-                let _ = if hide { window.hide() } else { window.show() };
+                // The island flies off before the window goes, and the window
+                // is back before the island springs in (see Island.tsx).
+                if hide {
+                    let _ = window.emit("lumen://visibility", false);
+                    thread::sleep(HIDE_ANIMATION);
+                    let _ = window.hide();
+                } else {
+                    let _ = window.show();
+                    let _ = window.emit("lumen://visibility", true);
+                }
                 hidden = hide;
             }
         }
