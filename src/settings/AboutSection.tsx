@@ -9,6 +9,11 @@ import { Settings, updateSettings } from "./useSettings";
 
 const REPO_URL = "https://github.com/Mittikbb/lumen";
 
+const AUTHORS = [
+  { name: "Mittikbb", login: "Mittikbb", role: "Автор" },
+  { name: "Lcky", login: "lackyhy", role: "Соавтор: громкость плеера, перетаскивание острова" },
+];
+
 interface UpdateInfo {
   current: string;
   latest: string;
@@ -76,6 +81,17 @@ export function AboutSection({ settings }: { settings: Settings }) {
         <Row title="Проверять автоматически" hint="При запуске и раз в несколько часов; о новой версии скажет остров">
           <Toggle on={settings.updates.auto} onChange={(auto) => updateSettings({ updates: { auto } })} />
         </Row>
+      </div>
+
+      <Heading>Авторы</Heading>
+      <div className="st-card">
+        {AUTHORS.map((a) => (
+          <Row key={a.login} title={a.name} hint={a.role}>
+            <button className="st-button quiet" onClick={() => open(`https://github.com/${a.login}`)}>
+              GitHub
+            </button>
+          </Row>
+        ))}
       </div>
 
       <div className="st-footnote">
