@@ -20,8 +20,14 @@ const version = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")).ve
 const key = process.env.TAURI_SIGNING_PRIVATE_KEY ?? join(homedir(), ".tauri", "lumen-updater.key");
 if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !existsSync(key)) throw new Error(`updater key not found: ${key}`);
 
+// npm is a .cmd on Windows and needs a shell; nothing else goes through one,
+// or arguments with spaces (the release title) get split.
 const run = (cmd, args, env = {}) =>
-  execFileSync(cmd, args, { stdio: "inherit", shell: process.platform === "win32", env: { ...process.env, ...env } });
+  execFileSync(cmd, args, {
+    stdio: "inherit",
+    shell: process.platform === "win32" && cmd === "npm",
+    env: { ...process.env, ...env },
+  });
 
 console.log(`Building Lumen ${version}…`);
 run("npm", ["run", "tauri", "build"], {
