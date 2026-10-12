@@ -1552,13 +1552,14 @@ html.capture-root #root {
   left: 0;
 }
 
-/* "Капля": the call as a round drop left of the island. */
+/* "Капля": the call as a drop left of the island; a pill while it announces. */
 .call-drop {
   position: absolute;
   left: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 999px;
   color: var(--island-fg-muted);
   pointer-events: none;
 }
@@ -1572,10 +1573,16 @@ html.capture-root #root {
 /* 1 px smaller, like .island-ghost, so the glow's ring stays visible. */
 .call-drop.fill {
   background: var(--island-bg);
-  clip-path: circle(calc(50% - 1px));
+  clip-path: inset(1px round 999px);
 }
 
-.call-drop img {
+.drop-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.drop-avatar img {
   width: 72%;
   height: 72%;
   border-radius: 50%;
@@ -1584,20 +1591,59 @@ html.capture-root #root {
   transition: box-shadow 0.15s;
 }
 
-.call-drop.speaking img {
+.call-drop.speaking .drop-avatar img {
   box-shadow:
     0 0 0 2px #3ba55d,
     0 0 10px 2px rgba(59, 165, 93, 0.55);
 }
 
 .call-drop svg {
-  width: 45%;
-  height: 45%;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.drop-avatar svg {
+  width: 45%;
+  height: 45%;
+}
+
+/* What happened: the name and a mark, after the avatar. */
+.drop-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 12px;
+  white-space: nowrap;
+}
+
+.drop-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--island-fg);
+}
+
+.drop-mark {
+  display: grid;
+  flex: none;
+}
+
+.drop-mark svg {
+  width: 16px;
+  height: 16px;
+}
+
+.drop-mark.good {
+  color: #3ba55d;
+}
+
+.drop-mark.bad {
+  color: #ff6b6e;
 }
 
 /* "Имя говорящего справа": the speaker's name moves to the right edge. */

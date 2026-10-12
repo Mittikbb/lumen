@@ -26,7 +26,8 @@ import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MiniCall } from "../discord/CallPanel";
-import { CallDrop, DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, useDropMotion } from "../discord/CallDrop";
+import { CallDrop, DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, notifyWidth, useDropMotion } from "../discord/CallDrop";
+import { useCallEvents } from "../discord/useCallEvents";
 import type { MotionPrefs } from "../settings/useSettings";
 
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
@@ -108,7 +109,8 @@ export function Island() {
   const time = useClock(rest);
   const look = settings?.look;
   const hotkeys = prefs.hotkeys;
-  const voice = useDiscord().voice;
+  const discord = useDiscord();
+  const voice = discord.voice;
   const blur = moves.blur && !moves.reduced;
   const noticeMs = (ms: number) => ms * notices.duration;
   useLook(look, media?.art);
@@ -175,8 +177,22 @@ export function Island() {
   const drop = dropGeometry(center, top, collapsedSize.width, shape.height);
   const dropAt = dropHover(cursor, drop, shape.height);
   const onDrop = !!dropCall && !expanded && !drag.dragging && dropAt.over;
-  const dropState: DropState = expanded ? "merged" : dropAt.near && !drag.dragging ? "out" : "rest";
-  const dropMotion = useDropMotion(dropState, drop.islandLeft, shape.height, moves.reduced);
+  // Joins, leaves, mic and sound changes: the drop pops out to tell.
+  const callEvent = useCallEvents(dropCall, discord.userId, !!dropCall);
+  const dropState: DropState = expanded
+    ? "merged"
+    : callEvent && !drag.dragging
+      ? "notify"
+      : dropAt.near && !drag.dragging
+        ? "out"
+        : "rest";
+  const dropMotion = useDropMotion(
+    dropState,
+    drop.islandLeft,
+    shape.height,
+    notifyWidth(shape.height, callEvent),
+    moves.reduced,
+  );
   const liquid = prefs.call.style === "drop" && !moves.reduced;
 
   // Alt+Space: jump to the search tab. Clicking anywhere else closes it.
@@ -342,20 +358,20 @@ export function Island() {
         // (without a glow of its own, or its ring would cut the neck).
         <>
           <motion.div ref={haloRef} className={`island island-halo${glow}`} {...twin(0)} />
-          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" event={callEvent} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
           <div className="liquid">
             <LiquidFilter />
             {/* 1 px smaller: the filter grows shapes a little, which would cover the glow's ring. */}
             <motion.div className="island-ghost" {...twin(1)} />
             <AnimatePresence>
               {dropCall && <DropNeck key="neck" motion={dropMotion} top={top} islandLeft={drop.islandLeft} lean={{ x, y }} />}
-              {dropCall && <CallDrop key="drop" layer="fill" motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+              {dropCall && <CallDrop key="drop" layer="fill" event={callEvent} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
             </AnimatePresence>
           </div>
         </>
       )}
       <AnimatePresence>
-        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} event={callEvent} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
       </AnimatePresence>
       <motion.div
         ref={ref}

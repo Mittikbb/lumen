@@ -57,6 +57,8 @@ pub struct Status {
     message: Option<String>,
     /// The Discord account Lumen is connected to.
     user: Option<String>,
+    /// Its id, to tell your own mic and sound changes from other people's.
+    user_id: Option<String>,
     voice: Option<Voice>,
 }
 
@@ -166,6 +168,7 @@ fn set_status(app: &AppHandle, state: &str, message: Option<String>) {
         }
         if state == "off" {
             s.user = None;
+            s.user_id = None;
         }
     });
 }
@@ -313,7 +316,11 @@ impl Session<'_> {
             .as_str()
             .or(ready["data"]["user"]["username"].as_str())
             .map(String::from);
-        update_status(self.app, |s| s.user = user);
+        let user_id = ready["data"]["user"]["id"].as_str().map(String::from);
+        update_status(self.app, |s| {
+            s.user = user;
+            s.user_id = user_id;
+        });
 
         let mut voice_note = None;
         if self.prefs.voice {

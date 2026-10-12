@@ -2,18 +2,18 @@ import { ReactNode } from "react";
 import { discordVoice, Member, Voice } from "./useDiscord";
 
 // Icons in the Lucide style (24px grid, 2px rounded strokes).
-const icon = (children: ReactNode) => (
+export const icon = (children: ReactNode) => (
   <svg viewBox="0 0 24 24" aria-hidden>
     {children}
   </svg>
 );
-const MIC = icon(
+export const MIC = icon(
   <>
     <rect x="9" y="2" width="6" height="12" rx="3" />
     <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" />
   </>,
 );
-const MIC_OFF = icon(
+export const MIC_OFF = icon(
   <>
     <path d="M2 2l20 20M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1" />
     <path d="M18.9 13.2A7 7 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M12 19v3" />
@@ -22,7 +22,7 @@ const MIC_OFF = icon(
 export const HEADPHONES = icon(
   <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />,
 );
-const HEADPHONES_OFF = icon(
+export const HEADPHONES_OFF = icon(
   <path d="M2 2l20 20M21 14h-1.3M9.1 3.5A9 9 0 0 1 21 12v3.3M20.4 20.4A2 2 0 0 1 19 21h-1a2 2 0 0 1-2-2v-3M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 2.6-6.4" />,
 );
 // A handset tipped over, like Discord's "leave call".

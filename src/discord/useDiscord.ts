@@ -25,10 +25,12 @@ export interface DiscordStatus {
   state: string;
   message: string | null;
   user: string | null;
+  /** Its id, to tell your own mic and sound changes from other people's. */
+  userId: string | null;
   voice: Voice | null;
 }
 
-const OFF: DiscordStatus = { state: "off", message: null, user: null, voice: null };
+const OFF: DiscordStatus = { state: "off", message: null, user: null, userId: null, voice: null };
 
 /** Connection state and the voice channel you're in, live from the backend. */
 export function useDiscord(): DiscordStatus {
