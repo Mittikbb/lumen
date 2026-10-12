@@ -1503,6 +1503,39 @@ html.capture-root #root {
   height: 15px;
 }
 
+/* Liquid layer under the island and the drop: their plain twins, melted
+   together by the #lumen-liquid filter where they come close. */
+.liquid {
+  position: absolute;
+  inset: 0;
+  filter: url(#lumen-liquid);
+  pointer-events: none;
+}
+
+.liquid-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.island-ghost,
+.call-drop-ghost {
+  position: absolute;
+  background: var(--island-bg);
+}
+
+.call-drop-ghost {
+  left: 0;
+  border-radius: 50%;
+}
+
+/* Carries the island's lean, so the drop keeps its gap while the island sways. */
+.call-drop-lean {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
 /* "Капля": the call as a round drop left of the island, painted under it. */
 .call-drop {
   position: absolute;

@@ -26,7 +26,7 @@ import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MiniCall } from "../discord/CallPanel";
-import { CallDrop, DropState, dropGeometry, dropHover } from "../discord/CallDrop";
+import { CallDrop, DropState, LiquidFilter, dropGeometry, dropHover } from "../discord/CallDrop";
 import type { MotionPrefs } from "../settings/useSettings";
 
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
@@ -175,6 +175,8 @@ export function Island() {
   const dropAt = dropHover(cursor, drop, shape.height);
   const onDrop = !!dropCall && !expanded && !drag.dragging && dropAt.over;
   const dropState: DropState = expanded ? "merged" : dropAt.near && !drag.dragging ? "out" : "peek";
+  const dropProps = { state: dropState, top, islandLeft: drop.islandLeft, size: shape.height, reduced: moves.reduced };
+  const liquid = prefs.call.style === "drop" && !moves.reduced;
 
   // Alt+Space: jump to the search tab. Clicking anywhere else closes it.
   useEffect(() => {
@@ -307,19 +309,27 @@ export function Island() {
 
   return (
     <div className="stage" style={stage}>
-      <AnimatePresence>
-        {dropCall && (
-          <CallDrop
-            key="drop"
-            voice={dropCall}
-            state={dropState}
-            top={top}
-            islandLeft={drop.islandLeft}
-            size={shape.height}
-            reduced={moves.reduced}
+      {liquid && (
+        // Plain twins of the island and the drop, melted together by the
+        // filter: the neck that lets the drop flow out of the island and back.
+        <div className="liquid">
+          <LiquidFilter />
+          <motion.div
+            className="island-ghost"
+            initial={false}
+            animate={{
+              left: center - size.width / 2,
+              width: size.width,
+              height: size.height,
+              borderRadius: expanded ? shape.radius : shape.height / 2,
+            }}
+            transition={shapeTransition(moves)}
+            style={{ top, x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" }}
           />
-        )}
-      </AnimatePresence>
+          <AnimatePresence>{dropCall && <CallDrop key="drop" ghost {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+        </div>
+      )}
+      <AnimatePresence>{dropCall && <CallDrop key="drop" {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
       <motion.div
         ref={ref}
         {...drag.handlers}
