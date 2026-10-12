@@ -122,6 +122,8 @@ export function Island() {
     (t) => t.id === "launcher" || (!hidden.includes(t.id) && (t.id !== "call" || !!voice)),
   );
   const showsTab = (id: TabId) => tabs.some((t) => t.id === id);
+  // A call in the collapsed island itself.
+  const miniCall = !!voice && showsTab("call");
   const [notice, setNotice] = useState<{
     title: string;
     detail: string;
@@ -273,7 +275,7 @@ export function Island() {
       }
     : notice
       ? { ...collapsedSize, width: Math.max(NOTICE_WIDTH, shape.width + 70) }
-      : voice && showsTab("call")
+      : miniCall
         ? { ...collapsedSize, width: Math.max(collapsedSize.width, 250) }
         : collapsedSize;
   const fade = (px: number) => (blur ? `blur(${px}px)` : "blur(0px)");
@@ -399,8 +401,8 @@ export function Island() {
                   <span className="notice-title">{notice.title}</span>
                   <span className="notice-detail">{notice.detail}</span>
                 </motion.div>
-              ) : voice && showsTab("call") ? (
-                <MiniCall voice={voice} />
+              ) : miniCall && voice ? (
+                <MiniCall voice={voice} speakerRight={prefs.call.style === "right"} />
               ) : media && rest.track ? (
                 <>
                   <AnimatePresence mode="popLayout" initial={false}>

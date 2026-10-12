@@ -1503,6 +1503,12 @@ html.capture-root #root {
   height: 15px;
 }
 
+/* "Имя говорящего справа": the speaker's name moves to the right edge. */
+.mini-call.speaker-right .mini-title {
+  text-align: right;
+  color: var(--island-fg);
+}
+
 /* No track length known: a short highlight runs along the bar while playing. */
 .bar.unknown .bar-fill {
   width: 30%;

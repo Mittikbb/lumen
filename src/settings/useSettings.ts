@@ -44,6 +44,9 @@ export interface IslandPrefs {
   pull: number;
 }
 
+/** How a Discord call shows while the island is collapsed. */
+export type CallStyle = "classic" | "right";
+
 /** What the collapsed island shows at rest. */
 export interface CollapsedPrefs {
   clock24: boolean;
@@ -121,6 +124,7 @@ export interface Settings {
   look: Look;
   island: IslandPrefs;
   collapsed: CollapsedPrefs;
+  call: { style: CallStyle };
   notices: NoticePrefs;
   motion: MotionPrefs;
   display: DisplayPrefs;
@@ -155,6 +159,7 @@ export const DEFAULT_SETTINGS: Settings = {
     pull: 1,
   },
   collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true },
+  call: { style: "classic" },
   notices: { copy: true, shelf: true, rain: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
   display: { monitor: null, hideFullscreen: true, hideMaximized: false, position: null },

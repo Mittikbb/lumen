@@ -3,9 +3,14 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { isTauri } from "../island/env";
 import { useDiscord } from "../discord/useDiscord";
 import { Heading, Row, TextField, Toggle } from "./controls";
-import { DiscordPrefs, Settings, updateSettings } from "./useSettings";
+import { CallStyle, DiscordPrefs, Settings, updateSettings } from "./useSettings";
 
 const PORTAL_URL = "https://discord.com/developers/applications";
+
+const CALL_STYLES: { id: CallStyle; label: string }[] = [
+  { id: "classic", label: "Аватары и имя" },
+  { id: "right", label: "Имя говорящего справа" },
+];
 
 const STATES: Record<string, { label: string; tone: "ok" | "wait" | "bad" | "off" }> = {
   off: { label: "Выключено", tone: "off" },
@@ -47,6 +52,21 @@ export function DiscordSection({ settings }: { settings: Settings }) {
         <Row title="Звонок на острове" hint="Кто в голосовом канале, кто говорит, микрофон и звук">
           <Toggle on={prefs.voice} onChange={(voice) => set({ voice })} />
         </Row>
+        {prefs.voice && (
+          <Row title="Как показывать звонок" hint="В свёрнутом острове">
+            <select
+              className="st-select"
+              value={settings.call.style}
+              onChange={(e) => updateSettings({ call: { style: e.target.value as CallStyle } })}
+            >
+              {CALL_STYLES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </Row>
+        )}
         <Row title="Статус «Слушает»" hint="Трек из любого плеера в профиле Discord. Spotify Discord показывает сам">
           <Toggle on={prefs.presence} onChange={(presence) => set({ presence })} />
         </Row>
