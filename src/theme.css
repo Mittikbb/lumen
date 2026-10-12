@@ -1503,8 +1503,23 @@ html.capture-root #root {
   height: 15px;
 }
 
-/* Liquid layer under the island and the drop: their plain twins, melted
-   together by the #lumen-liquid filter where they come close. */
+/* Call drop: the island is drawn in layers so island and drop make one
+   liquid shape. Its glow goes to a twin underneath (.island-halo), the real
+   island keeps only its body (.glowless). */
+.island.island-halo {
+  position: absolute;
+}
+
+.island.glowless,
+.island.glowless.reactive,
+.island.glowless.copied,
+.island.glowless.reduced {
+  animation: none;
+  box-shadow: none;
+}
+
+/* The fill: plain twins of island and drop melted together by the
+   #lumen-liquid filter wherever they come close. */
 .liquid {
   position: absolute;
   inset: 0;
@@ -1518,15 +1533,9 @@ html.capture-root #root {
   height: 0;
 }
 
-.island-ghost,
-.call-drop-ghost {
+.island-ghost {
   position: absolute;
   background: var(--island-bg);
-}
-
-.call-drop-ghost {
-  left: 0;
-  border-radius: 50%;
 }
 
 /* Carries the island's lean, so the drop keeps its gap while the island sways. */
@@ -1536,17 +1545,27 @@ html.capture-root #root {
   left: 0;
 }
 
-/* "Капля": the call as a round drop left of the island, painted under it. */
+/* "Капля": the call as a round drop left of the island. */
 .call-drop {
   position: absolute;
   left: 0;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--island-bg);
   color: var(--island-fg-muted);
   pointer-events: none;
+}
+
+.call-drop.halo,
+.call-drop.solid {
+  background: var(--island-bg);
   animation: glow 3.2s ease-in-out infinite;
+}
+
+/* 1 px smaller, like .island-ghost, so the glow's ring stays visible. */
+.call-drop.fill {
+  background: var(--island-bg);
+  clip-path: circle(calc(50% - 1px));
 }
 
 .call-drop img {

@@ -97,6 +97,7 @@ const SCAN_ICON = (
 
 export function Island() {
   const ref = useRef<HTMLDivElement>(null);
+  const haloRef = useRef<HTMLDivElement>(null);
   const drag = useIslandDrag(ref);
   const anchor = useAnchor();
   const cursor = useCursor();
@@ -265,8 +266,9 @@ export function Island() {
   useCopyEvents(clips, (entry) => {
     const flash = moves.copyFlash && !moves.reduced;
     if (flash) animate(bump, [1, 1.06, 0.98, 1], { duration: 0.45, ease: "easeOut" });
-    const el = ref.current;
-    if (el && flash) {
+    // The halo carries the glow when the call drop is on, so it flashes too.
+    for (const el of [ref.current, haloRef.current]) {
+      if (!el || !flash) continue;
       el.classList.remove("copied");
       void el.offsetWidth; // restart the CSS animation on rapid copies
       el.classList.add("copied");
@@ -307,33 +309,45 @@ export function Island() {
       }
     : { paddingTop: shape.offsetTop };
 
+  const glow = `${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}`;
+  // A twin that moves exactly like the island, `inset` px smaller all round.
+  const twin = (inset: number) => ({
+    initial: false as const,
+    animate: {
+      left: center - size.width / 2 + inset,
+      width: size.width - 2 * inset,
+      height: size.height - 2 * inset,
+      borderRadius: (expanded ? shape.radius : shape.height / 2) - inset,
+    },
+    transition: shapeTransition(moves),
+    style: { top: top + inset, x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" },
+  });
+
   return (
     <div className="stage" style={stage}>
       {liquid && (
-        // Plain twins of the island and the drop, melted together by the
-        // filter: the neck that lets the drop flow out of the island and back.
-        <div className="liquid">
-          <LiquidFilter />
-          <motion.div
-            className="island-ghost"
-            initial={false}
-            animate={{
-              left: center - size.width / 2,
-              width: size.width,
-              height: size.height,
-              borderRadius: expanded ? shape.radius : shape.height / 2,
-            }}
-            transition={shapeTransition(moves)}
-            style={{ top, x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" }}
-          />
-          <AnimatePresence>{dropCall && <CallDrop key="drop" ghost {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
-        </div>
+        // The call drop needs one liquid shape, so the island is drawn in
+        // layers: the glow, then the fill of island, neck and drop melted
+        // together by the filter, then the drop's face and the island on top
+        // (without a glow of its own, or its ring would cut the neck).
+        <>
+          <motion.div ref={haloRef} className={`island island-halo${glow}`} {...twin(0)} />
+          <AnimatePresence>{dropCall && <CallDrop key="drop" layer="halo" {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+          <div className="liquid">
+            <LiquidFilter />
+            {/* 1 px smaller: the filter grows shapes a little, which would cover the glow's ring. */}
+            <motion.div className="island-ghost" {...twin(1)} />
+            <AnimatePresence>{dropCall && <CallDrop key="drop" layer="fill" {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+          </div>
+        </>
       )}
-      <AnimatePresence>{dropCall && <CallDrop key="drop" {...dropProps} lean={{ x, y }} voice={dropCall} />}</AnimatePresence>
+      <AnimatePresence>
+        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} {...dropProps} lean={{ x, y }} voice={dropCall} />}
+      </AnimatePresence>
       <motion.div
         ref={ref}
         {...drag.handlers}
-        className={`island${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}${drag.ctrl ? " grab" : ""}${drag.dragging ? " dragging" : ""}`}
+        className={`island${liquid ? " glowless" : glow}${drag.ctrl ? " grab" : ""}${drag.dragging ? " dragging" : ""}`}
         initial={false}
         animate={{
           width: size.width,

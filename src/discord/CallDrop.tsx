@@ -6,7 +6,7 @@ import type { Voice } from "./useDiscord";
  * Gap between the popped-out drop and the island. Wider than the liquid
  * layer's reach (see LiquidFilter), so the drop separates once it's out.
  */
-const GAP = 12;
+const GAP = 14;
 /** How much of the resting drop shows from behind the island's left edge, and its size then. */
 const PEEK = 12;
 const PEEK_SCALE = 0.82;
@@ -45,7 +45,7 @@ export function LiquidFilter() {
   return (
     <svg className="liquid-defs" aria-hidden>
       <filter id="lumen-liquid" colorInterpolationFilters="sRGB">
-        <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
+        <feGaussianBlur in="SourceGraphic" stdDeviation="6" />
         <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9" />
       </filter>
     </svg>
@@ -56,10 +56,12 @@ export function LiquidFilter() {
  * "Капля": a Discord call as a round drop beside the island, like the second
  * activity on an iPhone. It peeks from behind the island's left edge, pops
  * out when the pointer comes close and flows into the island on hover.
- * `ghost` is its plain twin in the liquid layer, which draws the neck that
- * stretches and snaps between the drop and the island.
+ * It is drawn in layers (see Island.tsx): `halo` glows, `fill` is the plain
+ * twin melted with the island in the liquid layer (the neck that stretches
+ * and snaps between them), `face` shows who talks. `solid` is all in one, for
+ * reduced motion, where there is no liquid layer.
  */
-export function CallDrop({ voice, state, top, islandLeft, size, lean, reduced, ghost }: {
+export function CallDrop({ voice, state, top, islandLeft, size, lean, reduced, layer }: {
   voice: Voice;
   state: DropState;
   top: number;
@@ -68,7 +70,7 @@ export function CallDrop({ voice, state, top, islandLeft, size, lean, reduced, g
   /** The island's lean toward the pointer; the drop sways along, keeping its gap. */
   lean: { x: MotionValue<number>; y: MotionValue<number> };
   reduced: boolean;
-  ghost?: boolean;
+  layer: "halo" | "fill" | "face" | "solid";
 }) {
   const speaker = voice.members.find((m) => m.speaking);
   const x =
@@ -81,22 +83,23 @@ export function CallDrop({ voice, state, top, islandLeft, size, lean, reduced, g
   return (
     <motion.div className="call-drop-lean" style={{ x: lean.x, y: lean.y }}>
       <motion.div
-        className={ghost ? "call-drop-ghost" : `call-drop${speaker ? " speaking" : ""}`}
+        className={`call-drop ${layer}${speaker ? " speaking" : ""}`}
         style={{ top, width: size, height: size, originX: 1 }}
         // A call started: the drop flows out of the island.
         initial={{ x: islandLeft, scale: 0, opacity: 0 }}
         animate={{
           x,
           scale: state === "out" ? 1 : state === "peek" ? PEEK_SCALE : 0.4,
-          opacity: state === "merged" ? 0 : 1,
+          // At rest only the shape peeks out; who talks shows once it pops out.
+          opacity: state === "merged" || (layer === "face" && state === "peek") ? 0 : 1,
         }}
         // The call ended: the drop shrinks back into the island.
         exit={{ x: islandLeft, scale: 0, opacity: 0 }}
         // A soft spring with a little wobble, like a drop settling.
-        transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 19, mass: 0.9 }}
+        transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 19, mass: 1 }}
         aria-hidden
       >
-        {!ghost && (speaker ? <img src={speaker.avatar} alt="" draggable={false} /> : HEADPHONES)}
+        {(layer === "face" || layer === "solid") && (speaker ? <img src={speaker.avatar} alt="" draggable={false} /> : HEADPHONES)}
       </motion.div>
     </motion.div>
   );
