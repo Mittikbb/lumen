@@ -19,7 +19,7 @@ const AUTOSTART_MARKER: &str = "autostart-configured";
 struct AutostartItem(CheckMenuItem<Wry>);
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
-    enable_autostart_on_first_run(app);
+    prepare_autostart(app);
 
     // Dev builds would register the temporary debug executable, so the toggle
     // only works in installed (release) builds.
@@ -95,7 +95,10 @@ pub fn set_autostart(app: &AppHandle, on: bool) -> Option<bool> {
     Some(now)
 }
 
-fn enable_autostart_on_first_run(app: &AppHandle) {
+/// Turns autostart on at the first run. Later runs only refresh the entry so
+/// it points at this exe: after a reinstall into another folder it would
+/// otherwise keep starting a copy that's gone.
+fn prepare_autostart(app: &AppHandle) {
     if cfg!(debug_assertions) {
         return;
     }
@@ -103,10 +106,14 @@ fn enable_autostart_on_first_run(app: &AppHandle) {
         return;
     };
     let marker = dir.join(AUTOSTART_MARKER);
+    let manager = app.autolaunch();
     if marker.exists() {
+        if manager.is_enabled().unwrap_or(false) {
+            let _ = manager.enable();
+        }
         return;
     }
-    if app.autolaunch().enable().is_ok() {
+    if manager.enable().is_ok() {
         let _ = fs::create_dir_all(&dir);
         let _ = fs::write(marker, "");
     }
