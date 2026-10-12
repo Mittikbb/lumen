@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useCursor } from "./useCursor";
+import { useAnchor } from "./useAnchor";
+import { useIslandDrag } from "./useIslandDrag";
 import { useHitRegion } from "./useHitRegion";
 import { useClock } from "./useClock";
 import { trackKey, useMedia } from "../media/useMedia";
@@ -94,6 +96,8 @@ const SCAN_ICON = (
 
 export function Island() {
   const ref = useRef<HTMLDivElement>(null);
+  const drag = useIslandDrag(ref);
+  const anchor = useAnchor();
   const cursor = useCursor();
   const media = useMedia();
   const settings = useSettings();
@@ -151,7 +155,8 @@ export function Island() {
     if (notices.rain) setNotice({ ...alert, icon: <WeatherIcon sky="rain" />, ms: noticeMs(WEATHER_NOTICE_MS) });
   });
 
-  const expanded = hovered || launcherOpen || dropping;
+  // A dragged island stays collapsed so it's easy to place.
+  const expanded = (hovered && !drag.dragging) || launcherOpen || dropping;
 
   // Alt+Space: jump to the search tab. Clicking anywhere else closes it.
   useEffect(() => {
@@ -184,7 +189,7 @@ export function Island() {
     let dx = 0;
     let dy = 0;
     // Strength comes from the pull slider (0 switches it off).
-    if (el && cursor && !expanded && !moves.reduced) {
+    if (el && cursor && !expanded && !moves.reduced && !drag.dragging) {
       const cx = el.offsetLeft + el.offsetWidth / 2;
       const cy = el.offsetTop + el.offsetHeight / 2;
       dx = cursor.x - cx;
@@ -195,7 +200,7 @@ export function Island() {
     y.set(clamp(dy * 0.05, 0, 8) * pull);
     scaleX.set(1 + 0.07 * pull);
     scaleY.set(1 + 0.1 * pull);
-  }, [cursor, expanded, moves.reduced, shape.pull, x, y, scaleX, scaleY]);
+  }, [cursor, expanded, moves.reduced, drag.dragging, shape.pull, x, y, scaleX, scaleY]);
 
   // Track change: a quick squash-and-stretch "gulp", layered on top of the lean.
   const bump = useMotionValue(1);
@@ -273,11 +278,22 @@ export function Island() {
         : collapsedSize;
   const fade = (px: number) => (blur ? `blur(${px}px)` : "blur(0px)");
 
+  // A dragged island is centred on its anchor: uneven side padding shifts
+  // the flex centre there while the island keeps growing from its middle.
+  const stage = anchor
+    ? {
+        paddingTop: anchor.y,
+        paddingLeft: Math.max(0, 2 * anchor.x - window.innerWidth),
+        paddingRight: Math.max(0, window.innerWidth - 2 * anchor.x),
+      }
+    : { paddingTop: shape.offsetTop };
+
   return (
-    <div className="stage" style={{ paddingTop: shape.offsetTop }}>
+    <div className="stage" style={stage}>
       <motion.div
         ref={ref}
-        className={`island${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}`}
+        {...drag.handlers}
+        className={`island${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}${drag.ctrl ? " grab" : ""}${drag.dragging ? " dragging" : ""}`}
         initial={false}
         animate={{
           width: size.width,

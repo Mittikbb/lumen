@@ -55,6 +55,9 @@ pub struct Display {
     pub hide_fullscreen: bool,
     /// Hide while a window is maximized (zoomed) on the island's monitor.
     pub hide_maximized: bool,
+    /// Where the island was dragged on its monitor; `None` keeps it centred
+    /// along the top edge.
+    pub position: Option<Position>,
 }
 
 impl Default for Display {
@@ -63,8 +66,19 @@ impl Default for Display {
             monitor: None,
             hide_fullscreen: true,
             hide_maximized: false,
+            position: None,
         }
     }
+}
+
+/// A dragged island's spot, relative to its monitor so it survives a change
+/// of resolution or monitor.
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Position {
+    /// Island centre as a share of the monitor width (0 left, 1 right).
+    pub x: f64,
+    /// Island top below the monitor's top edge, in CSS px.
+    pub y: f64,
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
@@ -252,7 +266,11 @@ pub fn settings_update(app: AppHandle, patch: Value) -> Result<Settings, String>
     }
     // Clipboard and shelf limits apply on the next addition, so dragging a
     // slider down and back up never throws entries away.
-    if next.display.monitor != prev.display.monitor {
+    // The expanded size bounds where a dragged island may sit.
+    if next.display.monitor != prev.display.monitor
+        || next.display.position != prev.display.position
+        || next.rest.get("island") != prev.rest.get("island")
+    {
         overlay::redock(&app);
     }
     if next.discord != prev.discord {

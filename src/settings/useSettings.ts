@@ -78,6 +78,8 @@ export interface DisplayPrefs {
   monitor: string | null;
   hideFullscreen: boolean;
   hideMaximized: boolean;
+  /** Where the island was dragged (Ctrl + drag); null keeps it centred at the top. */
+  position: { x: number; y: number } | null;
 }
 
 export interface ClipboardPrefs {
@@ -155,7 +157,7 @@ export const DEFAULT_SETTINGS: Settings = {
   collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true },
   notices: { copy: true, shelf: true, rain: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
-  display: { monitor: null, hideFullscreen: true, hideMaximized: false },
+  display: { monitor: null, hideFullscreen: true, hideMaximized: false, position: null },
   clipboard: { limit: 60, keepDays: 0, ignore: [] },
   shelf: { limit: 40 },
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },

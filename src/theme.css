@@ -67,6 +67,15 @@ body,
   will-change: transform, width, height;
 }
 
+/* Ctrl held over the island: it can be dragged. */
+.island.grab {
+  cursor: grab;
+}
+
+.island.dragging {
+  cursor: grabbing;
+}
+
 /* While music plays the glow breathes faster. */
 .island.is-playing {
   animation-duration: 1.6s;

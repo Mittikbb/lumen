@@ -46,7 +46,7 @@ export function IslandSection({ settings }: { settings: Settings }) {
         <Row title="Скругление развёрнутого">
           <Slider value={island.radius} min={8} max={40} format={px} onChange={(radius) => shape({ radius })} />
         </Row>
-        <Row title="Отступ от верха экрана">
+        <Row title="Отступ от верха экрана" hint={display.position ? "Пока остров передвинут, не действует" : undefined}>
           <Slider value={island.offsetTop} min={0} max={40} format={px} onChange={(offsetTop) => shape({ offsetTop })} />
         </Row>
       </div>
@@ -66,6 +66,16 @@ export function IslandSection({ settings }: { settings: Settings }) {
               </option>
             ))}
           </select>
+        </Row>
+        <Row
+          title="Положение"
+          hint={display.position ? "Передвинут вручную" : "Зажмите Ctrl и перетащите остров мышью куда угодно"}
+        >
+          {display.position && (
+            <button className="st-button quiet" onClick={() => updateSettings({ display: { position: null } })}>
+              Вернуть наверх
+            </button>
+          )}
         </Row>
         <Row title="Прятать в полноэкранных приложениях" hint="Игры, видео на весь экран, презентации">
           <Toggle
