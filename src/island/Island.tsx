@@ -51,6 +51,12 @@ const EXPANDED_HEIGHT: Partial<Record<string, number>> = {
   launcher: 320,
 };
 
+/**
+ * Resting on the drop opens the island this much later than usual, and each
+ * click on it starts the wait over, so it can be clicked (mic, sound) first.
+ */
+const DROP_OPEN_DELAY = 700;
+
 /** How far (px) from the island the pointer starts to pull on it. */
 const PULL_RADIUS = 220;
 
@@ -99,6 +105,7 @@ const SCAN_ICON = (
 export function Island() {
   const ref = useRef<HTMLDivElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const drag = useIslandDrag(ref);
   const anchor = useAnchor();
   const cursor = useCursor();
@@ -195,6 +202,10 @@ export function Island() {
     moves.reduced,
   );
   const liquid = prefs.call.style === "drop" && !moves.reduced;
+  const dropLive = dropState === "out" || dropState === "notify";
+  // Clicks on the drop: each one holds off opening the island.
+  const [pokes, setPokes] = useState(0);
+  const poke = () => setPokes((n) => n + 1);
 
   // Alt+Space: jump to the search tab. Clicking anywhere else closes it.
   useEffect(() => {
@@ -205,7 +216,8 @@ export function Island() {
     return () => window.removeEventListener("blur", onBlur);
   }, [launcherOpen]);
 
-  useHitRegion(ref);
+  // The window catches the mouse over the drop too while it's out, for clicks.
+  useHitRegion(ref, dropCall && dropLive ? [dropRef] : []);
 
   // Hover intent: open a beat after the pointer arrives, close a bit after it leaves.
   const inside = (cursor?.inside ?? false) || onDrop;
@@ -223,11 +235,13 @@ export function Island() {
   useEffect(() => {
     if (hovered && dropCall) setTab(fromDrop.current ? "call" : chosenTab.current);
   }, [hovered]);
+  const onlyOnDrop = onDrop && !cursor?.inside;
   useEffect(() => {
     if (inside === hovered) return;
-    const t = setTimeout(() => setHovered(inside), inside ? shape.openDelay : shape.closeDelay);
+    const open = onlyOnDrop ? Math.max(shape.openDelay, DROP_OPEN_DELAY) : shape.openDelay;
+    const t = setTimeout(() => setHovered(inside), inside ? open : shape.closeDelay);
     return () => clearTimeout(t);
-  }, [inside, hovered, shape.openDelay, shape.closeDelay]);
+  }, [inside, hovered, onlyOnDrop, pokes, shape.openDelay, shape.closeDelay]);
 
   // Liquid lean: while collapsed, the island stretches toward a nearby pointer.
   const x = useSpring(0, leanSpring);
@@ -372,7 +386,21 @@ export function Island() {
         </>
       )}
       <AnimatePresence>
-        {dropCall && <CallDrop key="drop" layer={liquid ? "face" : "solid"} event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
+        {dropCall && (
+          <CallDrop
+            key="drop"
+            layer={liquid ? "face" : "solid"}
+            event={callEvent}
+            tint={prefs.call.tint}
+            motion={dropMotion}
+            top={top}
+            lean={{ x, y }}
+            voice={dropCall}
+            live={dropLive}
+            hitRef={dropRef}
+            onPoke={poke}
+          />
+        )}
       </AnimatePresence>
       <motion.div
         ref={ref}

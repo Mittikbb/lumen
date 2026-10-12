@@ -26,7 +26,7 @@ use windows::Win32::{
 
 use crate::settings;
 
-/// Island bounds in CSS pixels relative to the window, reported by the frontend.
+/// Bounds in CSS pixels relative to the window, reported by the frontend.
 #[derive(Clone, Copy, Default, Deserialize)]
 pub struct Rect {
     x: f64,
@@ -35,8 +35,19 @@ pub struct Rect {
     h: f64,
 }
 
+impl Rect {
+    fn contains(&self, x: f64, y: f64, margin: f64) -> bool {
+        x >= self.x - margin
+            && x <= self.x + self.w + margin
+            && y >= self.y - margin
+            && y <= self.y + self.h + margin
+    }
+}
+
+/// What catches the mouse: the island first, then anything clickable beside
+/// it (the call drop).
 #[derive(Default)]
-pub struct HitRegion(Mutex<Rect>);
+pub struct HitRegion(Mutex<Vec<Rect>>);
 
 #[derive(Clone, Serialize)]
 struct CursorEvent {
@@ -72,8 +83,8 @@ pub struct AnchorState(Mutex<Option<Anchor>>);
 pub struct Dragging(AtomicBool);
 
 #[tauri::command]
-pub fn set_hit_region(rect: Rect, region: State<HitRegion>) {
-    *region.0.lock().unwrap() = rect;
+pub fn set_hit_region(rects: Vec<Rect>, region: State<HitRegion>) {
+    *region.0.lock().unwrap() = rects;
 }
 
 /// Keyboard focus is borrowed only while the user types into the island
@@ -318,7 +329,7 @@ pub fn dock_to_top(window: &WebviewWindow) -> tauri::Result<()> {
 
 pub fn spawn_cursor_tracker(app: AppHandle) {
     thread::spawn(move || {
-        let mut was_inside = false;
+        let mut was_catching = false;
         let mut was_near = false;
 
         loop {
@@ -337,23 +348,21 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
 
             let x = (cursor.x - origin.x as f64) / scale;
             let y = (cursor.y - origin.y as f64) / scale;
-            let rect = *app.state::<HitRegion>().0.lock().unwrap();
+            let rects = app.state::<HitRegion>().0.lock().unwrap().clone();
+            let island = rects.first().copied().unwrap_or_default();
 
-            let inside = x >= rect.x - HIT_PADDING
-                && x <= rect.x + rect.w + HIT_PADDING
-                && y >= rect.y - HIT_PADDING
-                && y <= rect.y + rect.h + HIT_PADDING;
-            let near = x >= rect.x - NEAR_ZONE
-                && x <= rect.x + rect.w + NEAR_ZONE
-                && y >= rect.y - NEAR_ZONE
-                && y <= rect.y + rect.h + NEAR_ZONE;
+            // `inside` tells the frontend the pointer is over the island; the
+            // window also catches it over the rest (the drop), for clicks.
+            let inside = island.contains(x, y, HIT_PADDING);
+            let catches = rects.iter().any(|r| r.contains(x, y, HIT_PADDING));
+            let near = island.contains(x, y, NEAR_ZONE);
 
             // While dragging, the window keeps the mouse (see overlay_drag_start).
             if app.state::<Dragging>().0.load(Ordering::SeqCst) {
-                was_inside = true;
-            } else if inside != was_inside {
-                let _ = window.set_ignore_cursor_events(!inside);
-                was_inside = inside;
+                was_catching = true;
+            } else if catches != was_catching {
+                let _ = window.set_ignore_cursor_events(!catches);
+                was_catching = catches;
             }
             // Keep streaming while the pointer is close, plus one final event on
             // leaving the zone so the island can relax back to its rest shape.

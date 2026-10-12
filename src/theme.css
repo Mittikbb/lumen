@@ -1582,10 +1582,38 @@ html.capture-root #root {
   clip-path: inset(1px round 999px);
 }
 
+/* Popped out, the drop takes clicks: mic, or sound on a double click. */
+.call-drop.live {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .drop-avatar {
+  position: relative;
   display: grid;
   flex: none;
   place-items: center;
+}
+
+/* Your own mic or sound is off: a small red mark, kept inside the round. */
+.drop-off {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  color: #fff;
+  background: #ed4245;
+  box-shadow: 0 0 0 1.5px var(--island-bg);
+}
+
+.call-drop .drop-off svg {
+  width: 8px;
+  height: 8px;
+  stroke-width: 2.6;
 }
 
 .drop-avatar img {

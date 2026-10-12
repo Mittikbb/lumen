@@ -1,9 +1,9 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, Ref, useEffect, useRef } from "react";
 import { MotionValue, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { HEADPHONES, HEADPHONES_OFF, MIC, MIC_OFF, icon } from "./CallPanel";
 import type { DropPull } from "../settings/useSettings";
 import type { CallEvent, CallEventKind } from "./useCallEvents";
-import type { Voice } from "./useDiscord";
+import { discordVoice, type Voice } from "./useDiscord";
 
 /** Gap between the popped-out drop and the island. */
 const GAP = 14;
@@ -199,14 +199,40 @@ const MARKS: Record<CallEventKind, { mark: ReactNode; tone: string; text: string
   undeaf: { mark: HEADPHONES, tone: "good", text: "звук включён" },
 };
 
+/** A second click within this long makes it a double click. */
+const DOUBLE_MS = 260;
+
+/**
+ * Click: mic on/off; double click: sound on/off. A single click waits out the
+ * double-click window, so a double click doesn't flip the mic on the way.
+ */
+function useDropClicks(onPoke: () => void) {
+  const pending = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(pending.current), []);
+  return {
+    onClick: () => {
+      onPoke();
+      clearTimeout(pending.current);
+      pending.current = setTimeout(() => discordVoice("mute"), DOUBLE_MS);
+    },
+    onDoubleClick: () => {
+      clearTimeout(pending.current);
+      discordVoice("deaf");
+    },
+  };
+}
+
 /**
  * "Капля": a Discord call as a round drop that flows out of the island's left
  * end, like the second activity on an iPhone. It is drawn in layers (see
  * Island.tsx): `halo` glows, `fill` is the plain twin melted with the island
  * in the liquid layer, `face` shows who talks or what just happened. `solid`
  * is all in one, for reduced motion, where there is no liquid layer.
+ *
+ * The face takes clicks while `live` (popped out): see useDropClicks.
+ * `hitRef` gets the face, for the window's hit region.
  */
-export function CallDrop({ voice, event, motion: m, top, lean, layer, tint }: {
+export function CallDrop({ voice, event, motion: m, top, lean, layer, tint, live, hitRef, onPoke }: {
   voice: Voice;
   /** What the drop is announcing, if anything. */
   event: CallEvent | null;
@@ -217,15 +243,27 @@ export function CallDrop({ voice, event, motion: m, top, lean, layer, tint }: {
   layer: "halo" | "fill" | "face" | "solid";
   /** "discord" tints the drop's glow Discord blurple. */
   tint: "island" | "discord";
+  live?: boolean;
+  hitRef?: Ref<HTMLDivElement>;
+  /** Every click, so the island can hold off opening. */
+  onPoke?: () => void;
 }) {
   const speaker = voice.members.find((member) => member.speaking);
   const who = event?.member ?? speaker;
   const mark = event && MARKS[event.kind];
   const showsFace = layer === "face" || layer === "solid";
+  const clicks = useDropClicks(onPoke ?? (() => {}));
+  const takesClicks = showsFace && live;
+  // Your own mic or sound being off, unless the drop is saying just that.
+  const off = voice.deaf ? "deaf" : voice.mute ? "mute" : null;
   return (
     <motion.div className="call-drop-lean" style={{ x: lean.x, y: lean.y }} exit={{ opacity: 0 }}>
       <motion.div
-        className={`call-drop ${layer}${tint === "discord" ? " discord" : ""}${speaker && !event ? " speaking" : ""}`}
+        // Always attached: motion only takes a ref when it mounts.
+        ref={showsFace ? hitRef : undefined}
+        {...(takesClicks ? clicks : {})}
+        title={takesClicks ? "Клик — микрофон, двойной клик — звук" : undefined}
+        className={`call-drop ${layer}${tint === "discord" ? " discord" : ""}${speaker && !event ? " speaking" : ""}${takesClicks ? " live" : ""}`}
         style={{
           top,
           width: m.w,
@@ -239,9 +277,14 @@ export function CallDrop({ voice, event, motion: m, top, lean, layer, tint }: {
       >
         {showsFace && (
           <>
-            <span className="drop-avatar" style={{ width: m.size, height: m.size }}>
+            <motion.span
+              className="drop-avatar"
+              style={{ width: m.size, height: m.size }}
+              whileTap={takesClicks ? { scale: 0.86 } : undefined}
+            >
               {who ? <img src={who.avatar} alt="" draggable={false} /> : HEADPHONES}
-            </span>
+              {off && !event && <i className={`drop-off ${off}`}>{off === "deaf" ? HEADPHONES_OFF : MIC_OFF}</i>}
+            </motion.span>
             {event && mark && (
               <motion.span className="drop-note" style={{ opacity: m.label }} title={`${event.member.name}: ${mark.text}`}>
                 <span className="drop-name" style={{ maxWidth: NAME_MAX }}>
