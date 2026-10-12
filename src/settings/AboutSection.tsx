@@ -11,7 +11,7 @@ const REPO_URL = "https://github.com/Mittikbb/lumen";
 
 const AUTHORS = [
   { name: "Mittikbb", login: "Mittikbb", role: "Автор" },
-  { name: "Lcky", login: "lackyhy", role: "Соавтор: громкость плеера, перетаскивание острова" },
+  { name: "Lcky", login: "lackyhy", role: "Соавтор: громкость плеера, перетаскивание острова, ник справа, «Перелив», анимация появления" },
 ];
 
 interface UpdateInfo {
