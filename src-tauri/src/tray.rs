@@ -10,7 +10,10 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::settings;
+use crate::{registry, settings};
+
+/// Where Windows keeps per-user autostart entries.
+const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 /// Marks that autostart was set up once, so a user's "off" choice sticks.
 const AUTOSTART_MARKER: &str = "autostart-configured";
@@ -95,9 +98,10 @@ pub fn set_autostart(app: &AppHandle, on: bool) -> Option<bool> {
     Some(now)
 }
 
-/// Turns autostart on at the first run. Later runs only refresh the entry so
-/// it points at this exe: after a reinstall into another folder it would
-/// otherwise keep starting a copy that's gone.
+/// Turns autostart on at the first run. Later runs fix the entry only if it
+/// points at another exe (after a reinstall into another folder it would keep
+/// starting a copy that's gone). Rewriting it on every start would look like
+/// malware persistence: Kaspersky flagged 0.4.3 as PDM:Trojan.Win32.Generic.
 fn prepare_autostart(app: &AppHandle) {
     if cfg!(debug_assertions) {
         return;
@@ -108,7 +112,7 @@ fn prepare_autostart(app: &AppHandle) {
     let marker = dir.join(AUTOSTART_MARKER);
     let manager = app.autolaunch();
     if marker.exists() {
-        if manager.is_enabled().unwrap_or(false) {
+        if autostart_is_stale(app) && manager.is_enabled().unwrap_or(false) {
             let _ = manager.enable();
         }
         return;
@@ -117,4 +121,17 @@ fn prepare_autostart(app: &AppHandle) {
         let _ = fs::create_dir_all(&dir);
         let _ = fs::write(marker, "");
     }
+}
+
+/// Whether the autostart entry exists but starts some other exe.
+fn autostart_is_stale(app: &AppHandle) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let name = &app.package_info().name;
+    let Some(entry) = registry::string(registry::HKEY_CURRENT_USER, RUN_KEY, Some(name.as_str())) else {
+        return false;
+    };
+    let target = entry.trim().trim_start_matches('"').to_lowercase();
+    !target.starts_with(&exe.to_string_lossy().to_lowercase())
 }
