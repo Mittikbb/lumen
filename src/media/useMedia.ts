@@ -37,8 +37,13 @@ export function useMedia(): NowPlaying | null {
   return media;
 }
 
-/** Friendly player name from an SMTC app id ("Spotify.exe", "308046B0AF4A39CB", ...). */
-export function playerName(app: string) {
+/**
+ * Friendly player name from an SMTC app id ("Spotify.exe", "308046B0AF4A39CB",
+ * ...): the one you gave it in the settings, or a built-in one.
+ */
+export function playerName(app: string, names?: Record<string, string>) {
+  const own = names?.[app]?.trim();
+  if (own) return own;
   const id = app.toLowerCase();
   if (id.includes("spotify")) return "Spotify";
   // AyuGram and Telega are Telegram forks; check them before Telegram itself.

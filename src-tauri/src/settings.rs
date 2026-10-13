@@ -9,7 +9,7 @@
 //! window it's created hidden and non-activating and only made focusable once
 //! shown, so shell mods that restyle new windows leave it alone.
 
-use std::{fs, path::PathBuf, sync::Mutex};
+use std::{collections::BTreeMap, fs, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -40,9 +40,33 @@ pub struct Settings {
     pub shelf: ShelfPrefs,
     pub discord: DiscordPrefs,
     pub updates: UpdatePrefs,
+    pub players: PlayerPrefs,
     /// Frontend-only groups, kept untouched.
     #[serde(flatten)]
     pub rest: Map<String, Value>,
+}
+
+/// Media players by their SMTC app id: the ones seen playing, the ones the
+/// island leaves out, and names the user gave them.
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PlayerPrefs {
+    /// Players that have played something, in the order they first did.
+    pub known: Vec<String>,
+    /// Players the island (and the Discord status) ignores.
+    pub hidden: Vec<String>,
+    /// The user's names for players; empty means the built-in one.
+    pub names: BTreeMap<String, String>,
+}
+
+/// Adds a player to the known ones the first time it plays something.
+pub fn remember_player(app: &AppHandle, id: &str) {
+    let mut known = get(app).players.known;
+    if known.iter().any(|k| k == id) {
+        return;
+    }
+    known.push(id.to_string());
+    let _ = settings_update(app.clone(), serde_json::json!({ "players": { "known": known } }));
 }
 
 /// Where the island lives.

@@ -77,9 +77,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                             let _ = app.emit("lumen://notice", json!({ "title": "Микрофон", "detail": message, "kind": "mic" }));
                         }
                     }
-                    Some(Action::Play) => media_key("toggle"),
-                    Some(Action::Next) => media_key("next"),
-                    Some(Action::Previous) => media_key("previous"),
+                    Some(Action::Play) => media_key(app, "toggle"),
+                    Some(Action::Next) => media_key(app, "next"),
+                    Some(Action::Previous) => media_key(app, "previous"),
                     None => {}
                 }
             })
@@ -96,9 +96,10 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
 
 /// Play, pause or skip the playing track, off the shortcut thread: the
 /// player answers asynchronously.
-fn media_key(action: &'static str) {
+fn media_key(app: &AppHandle, action: &'static str) {
+    let app = app.clone();
     thread::spawn(move || {
-        let _ = media::media_control(action.into());
+        let _ = media::media_control(app, action.into());
     });
 }
 

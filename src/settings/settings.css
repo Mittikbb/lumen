@@ -912,3 +912,14 @@ html.settings-root #root {
 .st-about {
   padding-top: 56px;
 }
+
+/* A player in Модули: its own name, then whether the island shows it. */
+.st-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.st-player .st-text {
+  width: 170px;
+}

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ENGINES } from "../launcher/engines";
-import { Heading, Row, Slider, Toggle } from "./controls";
-import { SearchEngine, Settings, updateSettings } from "./useSettings";
+import { playerName } from "../media/useMedia";
+import { Heading, Row, Slider, TextField, Toggle } from "./controls";
+import { PlayerPrefs, SearchEngine, Settings, updateSettings } from "./useSettings";
 
 const KEEP_DAYS = [
   { value: 0, label: "Всегда" },
@@ -10,7 +11,7 @@ const KEEP_DAYS = [
   { value: 30, label: "Месяц" },
 ];
 
-/** Модули: clipboard history, shelf and web search. */
+/** Модули: clipboard history, shelf, web search and media. */
 export function ModulesSection({ settings }: { settings: Settings }) {
   const { clipboard, shelf, search } = settings;
 
@@ -84,6 +85,9 @@ export function ModulesSection({ settings }: { settings: Settings }) {
           />
         </Row>
       </div>
+
+      <Heading>Плееры</Heading>
+      <Players players={settings.players} />
     </>
   );
 }
@@ -124,5 +128,49 @@ function IgnoreList({ apps }: { apps: string[] }) {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Every player that has played something: a name of your own (empty keeps
+ * the built-in one) and whether the island shows it at all.
+ */
+function Players({ players }: { players: PlayerPrefs }) {
+  if (!players.known.length) {
+    return (
+      <div className="st-card">
+        <Row title="Пока пусто" hint="Плееры появятся здесь, как только в них что-нибудь заиграет">
+          <span />
+        </Row>
+      </div>
+    );
+  }
+  const show = (id: string, on: boolean) =>
+    updateSettings({ players: { hidden: on ? players.hidden.filter((h) => h !== id) : [...players.hidden, id] } });
+
+  return (
+    <>
+      <div className="st-card">
+        {players.known.map((id) => {
+          const builtIn = playerName(id);
+          return (
+            <Row key={id} title={builtIn} hint={id !== builtIn ? id : undefined}>
+              <span className="st-player">
+                <TextField
+                  value={players.names[id] ?? ""}
+                  placeholder="Своё название"
+                  onCommit={(name) => updateSettings({ players: { names: { [id]: name } } })}
+                />
+                <Toggle on={!players.hidden.includes(id)} onChange={(on) => show(id, on)} />
+              </span>
+            </Row>
+          );
+        })}
+      </div>
+      <div className="st-footnote">
+        Выключенный плеер остров не показывает — вместо него покажет другой, если что-то играет. Его трек не попадёт
+        и в статус Discord.
+      </div>
+    </>
   );
 }

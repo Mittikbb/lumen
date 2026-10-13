@@ -11,6 +11,8 @@ use std::{
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::settings;
 use windows::{
     Media::Control::{
         GlobalSystemMediaTransportControlsSession as Session,
@@ -38,6 +40,8 @@ pub struct NowPlaying {
 pub struct MediaState(Mutex<Option<NowPlaying>>);
 
 const POLL: Duration = Duration::from_millis(500);
+/// New players are looked for every this many polls.
+const LOOK_FOR_PLAYERS: u32 = 10;
 /// Offset between the Windows FILETIME epoch (1601) and the Unix epoch, in 100 ns ticks.
 const FILETIME_UNIX_OFFSET: i64 = 116_444_736_000_000_000;
 
@@ -56,9 +60,9 @@ pub fn media_state(state: State<MediaState>) -> Option<NowPlaying> {
 }
 
 #[tauri::command]
-pub fn media_control(action: String) -> Result<(), String> {
+pub fn media_control(app: AppHandle, action: String) -> Result<(), String> {
     let run = || -> windows::core::Result<()> {
-        let Some(session) = current_session()? else {
+        let Some(session) = shown_session(&app)? else {
             return Ok(());
         };
         let op = match action.as_str() {
@@ -77,9 +81,14 @@ pub fn spawn_watcher(app: AppHandle) {
     thread::spawn(move || {
         let mut art_key = String::new();
         let mut art: Option<String> = None;
+        let mut polls = 0u32;
 
         loop {
-            let now = read_now_playing(&mut art_key, &mut art).unwrap_or(None);
+            if polls % LOOK_FOR_PLAYERS == 0 {
+                let _ = remember_players(&app);
+            }
+            polls = polls.wrapping_add(1);
+            let now = read_now_playing(&app, &mut art_key, &mut art).unwrap_or(None);
             let state = app.state::<MediaState>();
             let mut last = state.0.lock().unwrap();
             if *last != now {
@@ -92,16 +101,57 @@ pub fn spawn_watcher(app: AppHandle) {
     });
 }
 
-fn current_session() -> windows::core::Result<Option<Session>> {
+/// The player the island shows: the one Windows calls current, unless the
+/// user hid it; then another one, preferring one that's playing.
+fn shown_session(app: &AppHandle) -> windows::core::Result<Option<Session>> {
+    let hidden = settings::get(app).players.hidden;
+    let shown = |s: &Session| {
+        s.SourceAppUserModelId()
+            .map(|id| !hidden.iter().any(|h| *h == id.to_string()))
+            .unwrap_or(false)
+    };
     let manager = SessionManager::RequestAsync()?.join()?;
-    Ok(manager.GetCurrentSession().ok())
+    if let Ok(current) = manager.GetCurrentSession() {
+        if shown(&current) {
+            return Ok(Some(current));
+        }
+    }
+    let others: Vec<Session> = manager.GetSessions()?.into_iter().filter(shown).collect();
+    let playing = others.iter().find(|s| is_playing(s)).cloned();
+    Ok(playing.or_else(|| others.into_iter().next()))
+}
+
+fn is_playing(session: &Session) -> bool {
+    session
+        .GetPlaybackInfo()
+        .and_then(|info| info.PlaybackStatus())
+        .is_ok_and(|status| status == PlaybackStatus::Playing)
+}
+
+/// Adds players that have something on to the known ones, so they can be
+/// named or hidden in the settings, hidden ones included.
+fn remember_players(app: &AppHandle) -> windows::core::Result<()> {
+    let known = settings::get(app).players.known;
+    let manager = SessionManager::RequestAsync()?.join()?;
+    for session in manager.GetSessions()? {
+        let id = session.SourceAppUserModelId()?.to_string();
+        if id.is_empty() || known.contains(&id) {
+            continue;
+        }
+        let props = session.TryGetMediaPropertiesAsync()?.join()?;
+        if !props.Title()?.is_empty() {
+            settings::remember_player(app, &id);
+        }
+    }
+    Ok(())
 }
 
 fn read_now_playing(
+    app: &AppHandle,
     art_key: &mut String,
     art: &mut Option<String>,
 ) -> windows::core::Result<Option<NowPlaying>> {
-    let Some(session) = current_session()? else {
+    let Some(session) = shown_session(app)? else {
         return Ok(None);
     };
 

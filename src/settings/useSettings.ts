@@ -139,6 +139,16 @@ export interface MediaPrefs {
   volumeSlider: boolean;
 }
 
+/** Players by their SMTC app id. */
+export interface PlayerPrefs {
+  /** Players that have played something, in the order they first did. */
+  known: string[];
+  /** Players the island and the Discord status leave out. */
+  hidden: string[];
+  /** Your names for players; empty means the built-in one. */
+  names: Record<string, string>;
+}
+
 export interface Settings {
   hotkeys: Hotkeys;
   /** Start menu AppID of the AI app; null picks the first one installed. */
@@ -163,6 +173,7 @@ export interface Settings {
   /** `install`: put a found update in by itself right after start. */
   updates: { auto: boolean; install: boolean };
   media: MediaPrefs;
+  players: PlayerPrefs;
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] | null ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -213,6 +224,7 @@ export const DEFAULT_SETTINGS: Settings = {
   discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true },
   updates: { auto: true, install: true },
   media: { volumeSlider: true },
+  players: { known: [], hidden: [], names: {} },
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

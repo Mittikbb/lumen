@@ -41,7 +41,7 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
         </AnimatePresence>
       </div>
       <div className="media-body">
-        <div className="media-app">{playerName(media.app)}</div>
+        <div className="media-app">{playerName(media.app, settings?.players.names)}</div>
         <div className="media-text">
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.div key={key} {...swap} transition={{ duration: 0.32, ease: "easeOut" }}>
@@ -88,7 +88,7 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
               <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5.5v13L14.5 12z" /></svg>
             </button>
           </div>
-          <VolumeSlider app={media.app} volume={volume} />
+          <VolumeSlider name={playerName(media.app, settings?.players.names)} volume={volume} />
         </div>
       </div>
     </div>
@@ -100,7 +100,7 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
  * slider inside the player, which Windows can't reach). A speaker icon right
  * of the controls; the slider slides out on hover, the wheel works too.
  */
-function VolumeSlider({ app, volume: { state, setVolume, toggleMute } }: { app: string; volume: Volume }) {
+function VolumeSlider({ name, volume: { state, setVolume, toggleMute } }: { name: string; volume: Volume }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   if (!state) return null;
@@ -146,7 +146,7 @@ function VolumeSlider({ app, volume: { state, setVolume, toggleMute } }: { app: 
     <div
       className={`media-volume${dragging ? " dragging" : ""}${muted ? " muted" : ""}`}
       onWheel={onWheel}
-      title={`Громкость ${playerName(app)} в микшере Windows: ${percent}%`}
+      title={`Громкость ${name} в микшере Windows: ${percent}%`}
     >
       <div
         ref={trackRef}
