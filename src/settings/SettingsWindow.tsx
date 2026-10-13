@@ -50,14 +50,36 @@ const SECTION_ICONS: Record<SectionId, ReactNode> = {
   about: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01" />,
 };
 
-const HOTKEY_ROWS: { id: keyof Hotkeys; title: string; hint: string }[] = [
-  { id: "launcher", title: "Поиск", hint: "Программы, калькулятор, вопрос ИИ" },
-  { id: "screenshot", title: "Скриншот области", hint: "Снимок сразу попадает в буфер" },
-  { id: "text", title: "Текст с экрана", hint: "Распознаёт текст и копирует его" },
+/** `optional`: off until a key is set, and can be switched off again. */
+type HotkeyRowSpec = { id: keyof Hotkeys; title: string; hint: string; optional?: boolean };
+
+const HOTKEY_GROUPS: { title: string; rows: HotkeyRowSpec[] }[] = [
+  {
+    title: "Основные",
+    rows: [
+      { id: "launcher", title: "Поиск", hint: "Программы, калькулятор, вопрос ИИ" },
+      { id: "screenshot", title: "Скриншот области", hint: "Снимок сразу попадает в буфер" },
+      { id: "text", title: "Текст с экрана", hint: "Распознаёт текст и копирует его" },
+    ],
+  },
+  {
+    title: "Discord",
+    rows: [{ id: "mic", title: "Микрофон", hint: "Выключить или включить микрофон в звонке", optional: true }],
+  },
+  {
+    title: "Музыка",
+    rows: [
+      { id: "play", title: "Пауза / играть", hint: "Трек, который сейчас на острове", optional: true },
+      { id: "next", title: "Следующий трек", hint: "", optional: true },
+      { id: "previous", title: "Предыдущий трек", hint: "", optional: true },
+    ],
+  },
 ];
 
+const HOTKEY_ROWS = HOTKEY_GROUPS.flatMap((g) => g.rows);
+
 /** Backend names for actions whose key another app holds. */
-type Action = "launcher" | "screenshot" | "text";
+type Action = keyof Hotkeys;
 
 /** The settings window: sections on the left, changes apply instantly. */
 export function SettingsWindow() {
@@ -289,13 +311,18 @@ function KeysSection({ hotkeys }: { hotkeys: Hotkeys }) {
 
   return (
     <>
-      <div className="st-card">
-        {HOTKEY_ROWS.map((row) => (
-          <HotkeyRow key={row.id} row={row} hotkeys={hotkeys} busy={busy.includes(row.id)} />
-        ))}
-      </div>
+      {HOTKEY_GROUPS.map((group) => (
+        <div key={group.title}>
+          <Heading>{group.title}</Heading>
+          <div className="st-card">
+            {group.rows.map((row) => (
+              <HotkeyRow key={row.id} row={row} hotkeys={hotkeys} busy={busy.includes(row.id)} />
+            ))}
+          </div>
+        </div>
+      ))}
       <div className="st-footnote">
-        Нажми на сочетание и набери новое. Esc — отмена.{" "}
+        Нажми на сочетание и набери новое. Esc — отмена. Действия без сочетания выключены.{" "}
         {!isDefault && (
           <button className="st-link" onClick={() => updateSettings({ hotkeys: DEFAULT_SETTINGS.hotkeys })}>
             Вернуть стандартные
@@ -306,7 +333,7 @@ function KeysSection({ hotkeys }: { hotkeys: Hotkeys }) {
   );
 }
 
-function HotkeyRow({ row, hotkeys, busy }: { row: (typeof HOTKEY_ROWS)[number]; hotkeys: Hotkeys; busy: boolean }) {
+function HotkeyRow({ row, hotkeys, busy }: { row: HotkeyRowSpec; hotkeys: Hotkeys; busy: boolean }) {
   const [recording, setRecording] = useState(false);
   const [held, setHeld] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -356,6 +383,10 @@ function HotkeyRow({ row, hotkeys, busy }: { row: (typeof HOTKEY_ROWS)[number]; 
   };
 
   const parts = recording ? held : shortcutParts(hotkeys[row.id]);
+  const clear = () => {
+    setError(null);
+    updateSettings({ hotkeys: { [row.id]: "" } });
+  };
 
   return (
     <Row
@@ -385,7 +416,13 @@ function HotkeyRow({ row, hotkeys, busy }: { row: (typeof HOTKEY_ROWS)[number]; 
           <kbd key={p}>{p}</kbd>
         ))}
         {recording && <span className="st-hotkey-prompt">{held.length ? "…" : "Нажми сочетание"}</span>}
+        {!recording && !parts.length && <span className="st-hotkey-empty">Не задано</span>}
       </button>
+      {row.optional && hotkeys[row.id] && !recording && (
+        <button className="st-hotkey-clear" title="Выключить" aria-label="Выключить сочетание" onClick={clear}>
+          ×
+        </button>
+      )}
     </Row>
   );
 }

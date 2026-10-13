@@ -157,13 +157,20 @@ impl Default for DiscordPrefs {
     }
 }
 
-/// Shortcuts as `Alt+Shift+KeyS`: modifiers plus a W3C key code.
+/// Shortcuts as `Alt+Shift+KeyS`: modifiers plus a W3C key code. An empty
+/// one is switched off; the newer actions start that way.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Hotkeys {
     pub launcher: String,
     pub screenshot: String,
     pub text: String,
+    /// Your Discord mic on or off.
+    pub mic: String,
+    /// The playing track: play or pause, next, previous.
+    pub play: String,
+    pub next: String,
+    pub previous: String,
 }
 
 impl Default for Hotkeys {
@@ -172,6 +179,10 @@ impl Default for Hotkeys {
             launcher: "Alt+Space".into(),
             screenshot: "Alt+Shift+KeyS".into(),
             text: "Alt+Shift+KeyT".into(),
+            mic: String::new(),
+            play: String::new(),
+            next: String::new(),
+            previous: String::new(),
         }
     }
 }

@@ -25,7 +25,7 @@ import { DEFAULT_SETTINGS, formatShortcut, openSettings, useSettings } from "../
 import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
-import { CallPanel, MiniCall } from "../discord/CallPanel";
+import { CallPanel, MIC_OFF, MiniCall } from "../discord/CallPanel";
 import { CallDrop, notifyWidth } from "../discord/CallDrop";
 import { DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, useDropMotion } from "./Drop";
 import { useTimer } from "../timer/timer";
@@ -323,7 +323,7 @@ export function Island() {
       setNotice({
         title: e.payload.title,
         detail: e.payload.detail,
-        icon: update ? UPDATE_ICON : SCAN_ICON,
+        icon: update ? UPDATE_ICON : e.payload.kind === "mic" ? MIC_OFF : SCAN_ICON,
         ms: noticeMsRef.current(update ? UPDATE_NOTICE_MS : NOTICE_MS),
       });
     });

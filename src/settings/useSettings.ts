@@ -11,10 +11,17 @@ export type Bounce = "calm" | "normal" | "springy";
 export type SearchEngine = "google" | "yandex" | "duckduckgo" | "bing";
 
 /** Shortcuts as `Alt+Shift+KeyS`: modifiers plus a KeyboardEvent.code. */
+/** Shortcuts as "Alt+Shift+KeyS"; an empty one is switched off. */
 export interface Hotkeys {
   launcher: string;
   screenshot: string;
   text: string;
+  /** Your Discord mic on or off. */
+  mic: string;
+  /** The playing track. */
+  play: string;
+  next: string;
+  previous: string;
 }
 
 /** "glow" breathes around the capsule; "flow" ("Перелив") runs its colours sideways along it. */
@@ -163,7 +170,15 @@ export type SettingsPatch = DeepPartial<Settings>;
 
 /** Defaults; the backend's match for the groups it reads. */
 export const DEFAULT_SETTINGS: Settings = {
-  hotkeys: { launcher: "Alt+Space", screenshot: "Alt+Shift+KeyS", text: "Alt+Shift+KeyT" },
+  hotkeys: {
+    launcher: "Alt+Space",
+    screenshot: "Alt+Shift+KeyS",
+    text: "Alt+Shift+KeyT",
+    mic: "",
+    play: "",
+    next: "",
+    previous: "",
+  },
   aiApp: null,
   browser: null,
   hiddenTabs: [],
@@ -285,6 +300,7 @@ const KEY_LABELS: Record<string, string> = {
 
 /** "Alt+Shift+KeyS" → ["Alt", "Shift", "S"]. */
 export function shortcutParts(shortcut: string): string[] {
+  if (!shortcut) return [];
   return shortcut.split("+").map((part) => {
     const label = part.replace(/^Key(?=[A-Z]$)/, "").replace(/^Digit(?=\d$)/, "").replace(/^Numpad/, "Num ");
     return KEY_LABELS[label] ?? label;

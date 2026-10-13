@@ -11,10 +11,11 @@ use std::{
 };
 
 use serde::Serialize;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 
-use crate::{capture, launcher, settings};
+use crate::{capture, discord, launcher, media, settings};
 
 const RETRY: Duration = Duration::from_secs(5);
 
@@ -24,6 +25,10 @@ pub enum Action {
     Launcher,
     Screenshot,
     Text,
+    Mic,
+    Play,
+    Next,
+    Previous,
 }
 
 #[derive(Default)]
@@ -67,6 +72,14 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                     Some(Action::Launcher) => launcher::toggle(app),
                     Some(Action::Screenshot) => capture::start(app, capture::Mode::Shot),
                     Some(Action::Text) => capture::start(app, capture::Mode::Text),
+                    Some(Action::Mic) => {
+                        if let Err(message) = discord::toggle_mute(app) {
+                            let _ = app.emit("lumen://notice", json!({ "title": "Микрофон", "detail": message, "kind": "mic" }));
+                        }
+                    }
+                    Some(Action::Play) => media_key("toggle"),
+                    Some(Action::Next) => media_key("next"),
+                    Some(Action::Previous) => media_key("previous"),
                     None => {}
                 }
             })
@@ -81,14 +94,30 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Play, pause or skip the playing track, off the shortcut thread: the
+/// player answers asynchronously.
+fn media_key(action: &'static str) {
+    thread::spawn(move || {
+        let _ = media::media_control(action.into());
+    });
+}
+
 /// Checks the shortcuts: each must parse, have a modifier and be unique.
+/// Empty ones are switched off and skipped.
 pub fn parse(hotkeys: &settings::Hotkeys) -> Result<Vec<(Action, Shortcut)>, String> {
     let mut keys: Vec<(Action, Shortcut)> = Vec::new();
     for (action, text) in [
         (Action::Launcher, &hotkeys.launcher),
         (Action::Screenshot, &hotkeys.screenshot),
         (Action::Text, &hotkeys.text),
+        (Action::Mic, &hotkeys.mic),
+        (Action::Play, &hotkeys.play),
+        (Action::Next, &hotkeys.next),
+        (Action::Previous, &hotkeys.previous),
     ] {
+        if text.is_empty() {
+            continue;
+        }
         let key: Shortcut = text
             .parse()
             .map_err(|_| format!("Не получается разобрать сочетание «{text}»"))?;

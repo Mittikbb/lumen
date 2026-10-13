@@ -131,6 +131,19 @@ pub fn discord_voice(discord: State<Discord>, action: String) -> Result<(), Stri
         "leave" => Command::Leave,
         _ => return Err(format!("unknown action {action}")),
     };
+    send(&discord, command)
+}
+
+/// Your mic on or off, from a shortcut; says why not when there's no call.
+pub fn toggle_mute(app: &AppHandle) -> Result<(), String> {
+    let discord = app.state::<Discord>();
+    if discord.status.lock().unwrap().voice.is_none() {
+        return Err("Ты не в звонке Discord".into());
+    }
+    send(&discord, Command::ToggleMute)
+}
+
+fn send(discord: &Discord, command: Command) -> Result<(), String> {
     let commands = discord.commands.lock().unwrap();
     let tx = commands.as_ref().ok_or("Discord не подключён")?;
     tx.send(command).map_err(|e| e.to_string())

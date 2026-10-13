@@ -403,6 +403,34 @@ html.settings-root #root {
   box-shadow: 0 0 16px color-mix(in srgb, var(--glow-a) 25%, transparent);
 }
 
+/* No key set: the action is off. */
+.st-hotkey-empty {
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--island-fg-muted);
+}
+
+.st-hotkey-clear {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--island-fg-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.st-hotkey-clear:hover {
+  color: var(--island-fg);
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .st-hotkey-prompt {
   padding: 0 4px;
   font-size: 12px;
