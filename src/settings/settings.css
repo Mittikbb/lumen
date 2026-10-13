@@ -540,7 +540,12 @@ html.settings-root #root {
   text-align: center;
 }
 
+/* A button in disguise: 10 quick taps open Расширенные. */
 .st-about-logo {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  cursor: default;
   display: grid;
   place-items: center;
   width: 84px;
@@ -1045,3 +1050,19 @@ html.settings-root #root {
   fill: none;
 }
 
+.st-about-secret {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--glow-a);
+}
+
+/* A key or command to type, like the shortcut keys. */
+.st-key {
+  padding: 3px 8px;
+  border: 1px solid var(--island-line);
+  border-bottom-width: 2px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}

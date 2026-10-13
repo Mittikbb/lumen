@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
@@ -49,9 +49,7 @@ export function AboutSection({ settings }: { settings: Settings }) {
   return (
     <>
       <div className="st-about">
-        <div className="island st-about-logo">
-          <span className="orb" />
-        </div>
+        <SecretLogo unlocked={settings.advanced.unlocked} />
         <div className="st-about-name">Lumen</div>
         <div className="st-row-hint">{version ? `Версия ${version}` : "Версия для разработки"}</div>
         <p className="st-about-text">Живой остров в верхней части рабочего стола Windows.</p>
@@ -158,4 +156,52 @@ function useUpdate() {
   };
 
   return { info, checking, error, check, install, installing };
+}
+
+/** Taps on the logo it takes to open the hidden Расширенные section. */
+const TAPS = 10;
+/** A pause longer than this starts the count over. */
+const TAP_GAP_MS = 1500;
+
+/**
+ * The logo, which opens the hidden Расширенные section after TAPS quick taps,
+ * counting down from halfway, like developer options on a phone.
+ */
+function SecretLogo({ unlocked }: { unlocked: boolean }) {
+  const [taps, setTaps] = useState(0);
+  const last = useRef(0);
+  const [said, setSaid] = useState<string | null>(null);
+
+  const tap = () => {
+    const now = Date.now();
+    const count = now - last.current > TAP_GAP_MS ? 1 : taps + 1;
+    last.current = now;
+    setTaps(count);
+    if (unlocked) {
+      if (count >= 3) setSaid("Раздел «Расширенные» уже открыт");
+      return;
+    }
+    if (count >= TAPS) {
+      setTaps(0);
+      setSaid("Открыт раздел «Расширенные»");
+      updateSettings({ advanced: { unlocked: true } });
+    } else if (count >= TAPS / 2) {
+      setSaid(`Ещё ${TAPS - count}…`);
+    }
+  };
+
+  useEffect(() => {
+    if (!said) return;
+    const t = setTimeout(() => setSaid(null), 2000);
+    return () => clearTimeout(t);
+  }, [said, taps]);
+
+  return (
+    <>
+      <button type="button" className="island st-about-logo" onClick={tap} aria-label="Lumen">
+        <span className="orb" />
+      </button>
+      {said && <div className="st-about-secret">{said}</div>}
+    </>
+  );
 }

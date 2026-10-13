@@ -171,6 +171,10 @@ export interface PlayerPrefs {
 export type CodeBorderColor = "code" | "theme";
 
 export interface AdvancedPrefs {
+  /** The hidden Расширенные section is shown (10 taps on the logo in О Lumen). */
+  unlocked: boolean;
+  /** HTTP codes and network protocols in search (h:404, h:dns, hHelp:). Off by default. */
+  lookup: boolean;
   /** Edge and glow color of the droplet window on Enter: "code" (category color) or "theme" (program accent). */
   codeBorderColor: CodeBorderColor;
   /** Backdrop blur effect for the droplet card. */
@@ -274,6 +278,8 @@ export const DEFAULT_SETTINGS: Settings = {
   players: { known: [], hidden: [], names: {} },
   downloads: { enabled: false },
   advanced: {
+    unlocked: false,
+    lookup: false,
     codeBorderColor: "code",
     dropletGlassBlur: true,
   },

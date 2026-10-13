@@ -993,7 +993,8 @@ export function searchHttpCodes(query: string): NetworkSearchResult[] {
   let term = "";
   let matchedPrefix = false;
 
-  const prefixMatch = /^(?:h|http)(?::|\s+)(.*)$/i.exec(trimmed);
+  // Only with a colon: "http something" is an ordinary search.
+  const prefixMatch = /^(?:h|http):(.*)$/i.exec(trimmed);
   const shortCodeMatch = /^h(\d{3})$/i.exec(trimmed);
 
   if (prefixMatch) {

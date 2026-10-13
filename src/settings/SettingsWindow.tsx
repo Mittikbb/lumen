@@ -84,6 +84,12 @@ type Action = keyof Hotkeys;
 export function SettingsWindow() {
   const settings = useSettings();
   const [section, setSection] = useState<SectionId>("general");
+  // "Расширенные" stays out of the list until unlocked in О Lumen.
+  const unlocked = !!settings?.advanced.unlocked;
+  const sections = SECTIONS.filter((s) => s.id !== "advanced" || unlocked);
+  useEffect(() => {
+    if (section === "advanced" && !unlocked) setSection("about");
+  }, [section, unlocked]);
   useLook(settings?.look);
 
   useEffect(() => {
@@ -97,7 +103,7 @@ export function SettingsWindow() {
           <span className="orb" />
           Lumen
         </div>
-        {SECTIONS.map((s) => (
+        {sections.map((s) => (
           <button
             key={s.id}
             className="st-nav-item"

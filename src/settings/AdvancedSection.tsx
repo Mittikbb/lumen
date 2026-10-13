@@ -8,61 +8,72 @@ const BORDER_COLOR_OPTIONS: { value: CodeBorderColor; label: string }[] = [
   { value: "theme", label: "Тема программы" },
 ];
 
-/** Расширенные настройки: края окна кодов, база Protocol-list, параметры оформления. */
+/**
+ * Расширенные: hidden until 10 taps on the logo in О Lumen. The HTTP codes and
+ * network protocols lookup (off by default), its card's look, Protocol-list.
+ */
 export function AdvancedSection({ settings }: { settings: Settings }) {
-  const advanced = settings.advanced ?? {
-    codeBorderColor: "code",
-    dropletGlassBlur: true,
-  };
+  const advanced = settings.advanced;
 
   const setAdvanced = (patch: Partial<typeof advanced>) =>
     updateSettings({ advanced: patch });
 
   return (
     <>
-      <Heading>Справочник кодов и протоколов (Enter в поиске)</Heading>
+      <Heading>Справочник кодов и протоколов</Heading>
       <div className="st-card">
-        <Row
-          title="Цвет краёв инфо-окна"
-          hint="Цвет рамки и свечения выезжающего окна информации при нажатии Enter"
-        >
-          <Segmented
-            value={advanced.codeBorderColor}
-            options={BORDER_COLOR_OPTIONS}
-            onChange={(codeBorderColor) => setAdvanced({ codeBorderColor })}
-          />
-        </Row>
-
-        <div
-          className="st-droplet-preview"
-          style={
-            {
-              "--preview-accent":
-                advanced.codeBorderColor === "theme" ? "var(--glow-a)" : "#4ade80",
-            } as React.CSSProperties
-          }
-        >
-          <div className="st-preview-badge">200 OK</div>
-          <div className="st-preview-info">
-            <span className="st-preview-title">Пример: HTTP 200 OK</span>
-            <span className="st-preview-sub">
-              {advanced.codeBorderColor === "theme"
-                ? "Края и свечение окрашены в цвет темы Lumen"
-                : "Края и свечение окрашены по категории кода (зелёный для 2xx)"}
-            </span>
-          </div>
-        </div>
-
-        <Row
-          title="Размытие стекла"
-          hint="Эффект матового стекла под выезжающей каплей информации"
-        >
-          <Toggle
-            on={advanced.dropletGlassBlur}
-            onChange={(dropletGlassBlur) => setAdvanced({ dropletGlassBlur })}
-          />
+        <Row title="Справочник в поиске" hint="h:404, h:dns, h:wireguard или hHelp: — Enter открывает карточку">
+          <Toggle on={advanced.lookup} onChange={(lookup) => setAdvanced({ lookup })} />
         </Row>
       </div>
+
+      {advanced.lookup && (
+        <>
+          <Heading>Карточка</Heading>
+          <div className="st-card">
+            <Row
+              title="Цвет краёв инфо-окна"
+              hint="Цвет рамки и свечения выезжающего окна информации при нажатии Enter"
+            >
+              <Segmented
+                value={advanced.codeBorderColor}
+                options={BORDER_COLOR_OPTIONS}
+                onChange={(codeBorderColor) => setAdvanced({ codeBorderColor })}
+              />
+            </Row>
+
+            <div
+              className="st-droplet-preview"
+              style={
+                {
+                  "--preview-accent":
+                    advanced.codeBorderColor === "theme" ? "var(--glow-a)" : "#4ade80",
+                } as React.CSSProperties
+              }
+            >
+              <div className="st-preview-badge">200 OK</div>
+              <div className="st-preview-info">
+                <span className="st-preview-title">Пример: HTTP 200 OK</span>
+                <span className="st-preview-sub">
+                  {advanced.codeBorderColor === "theme"
+                    ? "Края и свечение окрашены в цвет темы Lumen"
+                    : "Края и свечение окрашены по категории кода (зелёный для 2xx)"}
+                </span>
+              </div>
+            </div>
+
+            <Row
+              title="Размытие стекла"
+              hint="Эффект матового стекла под выезжающей каплей информации"
+            >
+              <Toggle
+                on={advanced.dropletGlassBlur}
+                onChange={(dropletGlassBlur) => setAdvanced({ dropletGlassBlur })}
+              />
+            </Row>
+          </div>
+        </>
+      )}
 
       <Heading>Справочник Protocol-list</Heading>
       <div className="st-card">
@@ -88,6 +99,12 @@ export function AdvancedSection({ settings }: { settings: Settings }) {
         >
           <kbd className="st-key">hHelp:</kbd>
         </Row>
+      </div>
+      <div className="st-footnote">
+        Раздел открывается десятью нажатиями на логотип в «О Lumen».{" "}
+        <button className="st-link" onClick={() => setAdvanced({ unlocked: false })}>
+          Спрятать раздел
+        </button>
       </div>
     </>
   );

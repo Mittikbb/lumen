@@ -66,6 +66,7 @@ function buildResults(
   hotkeys: Hotkeys,
   engine: SearchEngine,
   maxApps: number,
+  lookup: boolean,
 ): Result[] {
   const q = query.trim();
   const out: Result[] = [];
@@ -141,9 +142,11 @@ function buildResults(
     });
   }
 
-  const isHelpQuery = /^hhelp:?/i.test(q) || /^(?:h|http):help/i.test(q);
-  const isHttpQuery = isHelpQuery || /^(?:h|http)(?::|\s+)/i.test(q) || /^h\d{3}$/i.test(q);
-  const httpResults = searchHttpCodes(q);
+  // Codes and protocols only when switched on (Расширенные), and only with a
+  // colon (h:404, http:dns) or as h404, so ordinary searches stay ordinary.
+  const isHelpQuery = lookup && (/^hhelp:?/i.test(q) || /^(?:h|http):help/i.test(q));
+  const isHttpQuery = lookup && (isHelpQuery || /^(?:h|http):/i.test(q) || /^h\d{3}$/i.test(q));
+  const httpResults = isHttpQuery ? searchHttpCodes(q) : [];
   if (httpResults.length > 0) {
     for (const item of httpResults) {
       if (item.kind === "github-help") {
@@ -385,6 +388,7 @@ export function LauncherPanel({
   hotkeys,
   engine,
   maxApps = 5,
+  lookup = false,
   detailItem,
   onDetailChange,
   codeBorderColor = "code",
@@ -395,6 +399,8 @@ export function LauncherPanel({
   engine: SearchEngine;
   /** How many programs a search lists at most. */
   maxApps?: number;
+  /** HTTP codes and network protocols in search. */
+  lookup?: boolean;
   detailItem?: NetworkSearchResult | null;
   onDetailChange?: (item: NetworkSearchResult | null) => void;
   codeBorderColor?: CodeBorderColor;
@@ -415,8 +421,8 @@ export function LauncherPanel({
   };
 
   const results = useMemo(
-    () => buildResults(query, apps, ai, hotkeys, engine, maxApps),
-    [query, apps, ai, hotkeys, engine, maxApps],
+    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup),
+    [query, apps, ai, hotkeys, engine, maxApps, lookup],
   );
 
   // Fresh, focused search box every time the launcher opens.

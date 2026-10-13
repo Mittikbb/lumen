@@ -48,6 +48,10 @@ const COPY_FLASH_MS = 700;
 const QUIET_COPY_MS = 1500;
 const EXPANDED_HEIGHT_DEFAULT = 230;
 const CALL_TAB_WIDTH = 80;
+/** The code info card beside the search results. */
+const DETAIL_WIDTH = 295;
+/** Kept free on each side of the island so its glow isn't cut by the window. */
+const SIDE_ROOM = 40;
 /** Tabs with more content get a taller island. */
 const EXPANDED_HEIGHT: Partial<Record<string, number>> = {
   call: 262,
@@ -383,10 +387,11 @@ export function Island() {
   const size = expanded
     ? {
         // The extra "Звонок" tab needs room, or the clock gets cut off.
-        width:
-          shape.expandedWidth +
-          (showsTab("call") ? CALL_TAB_WIDTH : 0) +
-          (tab === "launcher" && detailItem ? 295 : 0),
+        width: expandedWidth(
+          shape.expandedWidth + (showsTab("call") ? CALL_TAB_WIDTH : 0),
+          tab === "launcher" && !!detailItem,
+          center,
+        ),
         height: EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT,
       }
     : collapsedSize;
@@ -583,6 +588,7 @@ export function Island() {
                   hotkeys={hotkeys}
                   engine={prefs.search.engine}
                   maxApps={prefs.search.apps}
+                  lookup={prefs.advanced.lookup}
                   detailItem={detailItem}
                   onDetailChange={setDetailItem}
                   codeBorderColor={prefs.advanced?.codeBorderColor ?? "code"}
@@ -684,6 +690,17 @@ function useLingering<T>(value: T | null, ms: number): T | null {
     return () => clearTimeout(t);
   }, [value, ms]);
   return value ?? kept;
+}
+
+/**
+ * The expanded island's width, wider by the code card when it's open, but
+ * never so wide that it (and its glow) runs out of the window: the card then
+ * takes its room from the results list.
+ */
+function expandedWidth(base: number, detail: boolean, center: number) {
+  if (!detail) return base;
+  const room = 2 * Math.min(center, window.innerWidth - center) - 2 * SIDE_ROOM;
+  return Math.max(base, Math.min(base + DETAIL_WIDTH, room));
 }
 
 const SKIP_ICON = (
