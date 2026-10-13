@@ -336,7 +336,7 @@ function KeysSection({ hotkeys }: { hotkeys: Hotkeys }) {
           </button>
         )}
         <div className="st-footnote-note">
-          Не советуем ставить Alt+F3: в некоторых программах это сочетание уже занято. P.S. Lackyhy
+          не советую ставить Alt + F3 [P.S. Lackyhy]
         </div>
       </div>
     </>
