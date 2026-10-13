@@ -179,6 +179,12 @@ export function parseTimer(query: string): number | null {
 }
 
 let audio: AudioContext | null = null;
+/** From the settings: whether a finished timer chimes, and how loud (0–1). */
+let sound = { on: true, volume: 0.6 };
+
+export function setTimerSound(on: boolean, volume: number) {
+  sound = { on, volume };
+}
 
 /** Wakes the audio up while the user is starting the timer (autoplay rules). */
 function prime() {
@@ -190,10 +196,15 @@ function prime() {
   }
 }
 
-/** Three soft rising notes. */
+/** Three soft rising notes, unless the settings switched them off. */
 function chime() {
+  if (sound.on) playChime(sound.volume);
+}
+
+/** The chime at `volume` (0–1), e.g. to try it out in the settings. */
+export function playChime(volume: number) {
   prime();
-  if (!audio) return;
+  if (!audio || volume <= 0) return;
   const now = audio.currentTime;
   [660, 880, 990].forEach((freq, i) => {
     const at = now + i * 0.18;
@@ -202,7 +213,7 @@ function chime() {
     osc.type = "sine";
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(0.18, at + 0.02);
+    gain.gain.linearRampToValueAtTime(0.3 * volume, at + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.001, at + 0.5);
     osc.connect(gain).connect(audio!.destination);
     osc.start(at);

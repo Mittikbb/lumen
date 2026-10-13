@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../island/env";
-import { Heading, Row, Slider, Toggle } from "./controls";
+import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
 import { CollapsedPrefs, IslandPrefs, NoticePrefs, Settings, updateSettings } from "./useSettings";
 
 interface Monitor {
@@ -89,9 +89,31 @@ export function IslandSection({ settings }: { settings: Settings }) {
             onChange={(hideMaximized) => updateSettings({ display: { hideMaximized } })}
           />
         </Row>
-        <Row title="Задержка раскрытия" hint="Сколько держать курсор над островом">
-          <Slider value={island.openDelay} min={0} max={600} step={20} format={ms} onChange={(openDelay) => shape({ openDelay })} />
+        <Row
+          title="Раскрывать"
+          hint={island.openOn === "click" ? "Сворачивается, когда уводишь курсор" : "Когда курсор задерживается на острове"}
+        >
+          <Segmented
+            value={island.openOn}
+            options={[
+              { value: "hover", label: "При наведении" },
+              { value: "click", label: "По клику" },
+            ]}
+            onChange={(openOn) => shape({ openOn })}
+          />
         </Row>
+        {island.openOn === "hover" && (
+          <Row title="Задержка раскрытия" hint="Сколько держать курсор над островом">
+            <Slider
+              value={island.openDelay}
+              min={0}
+              max={600}
+              step={20}
+              format={ms}
+              onChange={(openDelay) => shape({ openDelay })}
+            />
+          </Row>
+        )}
         <Row title="Задержка сворачивания" hint="Сколько остров ждёт после ухода курсора">
           <Slider
             value={island.closeDelay}

@@ -33,6 +33,8 @@
     --glow-b 1.2s ease;
   /* Glow strength from the settings: opacity and reach of the halo. */
   --glow-k: 1;
+  /* Glow pace: 1 as designed, more is slower. */
+  --glow-t: 1;
   --glow-r: 1;
 
   --radius-expanded: 30px;
@@ -69,7 +71,7 @@ body,
   position: relative;
   background: var(--island-bg);
   overflow: hidden;
-  animation: glow 3.2s ease-in-out infinite;
+  animation: glow calc(3.2s * var(--glow-t)) ease-in-out infinite;
   will-change: transform, width, height;
 }
 
@@ -84,7 +86,7 @@ body,
 
 /* While music plays the glow breathes faster. */
 .island.is-playing {
-  animation-duration: 1.6s;
+  animation-duration: calc(1.6s * var(--glow-t));
 }
 
 /* With live audio the glow follows the kick drum instead of a fixed rhythm. */
@@ -102,11 +104,11 @@ body,
    blurred band of them behind it (.island-flow). */
 .island.flow,
 .stage.flow .drop-body.halo {
-  animation: flow 3.6s ease-in-out infinite;
+  animation: flow calc(3.6s * var(--glow-t)) ease-in-out infinite;
 }
 
 .island.flow.is-playing {
-  animation-duration: 1.8s;
+  animation-duration: calc(1.8s * var(--glow-t));
 }
 
 /* With live audio the colours spread sideways with the kick drum. */
@@ -154,11 +156,11 @@ body,
   background-size: 200% 100%;
   filter: blur(calc(22px * var(--glow-r)));
   opacity: calc(0.75 * var(--glow-k));
-  animation: flow-band 3.6s linear infinite;
+  animation: flow-band calc(3.6s * var(--glow-t)) linear infinite;
 }
 
 .island-flow.is-playing {
-  animation-duration: 1.8s;
+  animation-duration: calc(1.8s * var(--glow-t));
 }
 
 .island-flow.reactive {
@@ -1658,7 +1660,7 @@ html.capture-root #root {
 .drop-body.halo,
 .drop-body.solid {
   background: var(--island-bg);
-  animation: glow 3.2s ease-in-out infinite;
+  animation: glow calc(3.2s * var(--glow-t)) ease-in-out infinite;
 }
 
 /* "Цвет: Discord" — the drop's glow in Discord blurple. */

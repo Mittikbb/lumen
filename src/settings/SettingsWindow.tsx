@@ -2,13 +2,11 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { isTauri } from "../island/env";
 import { useApps } from "../launcher/useLauncher";
-import { City, setCity, useCitySearch } from "../weather/useWeather";
 import { TABS, TabId } from "../island/tabs";
 import { useLook } from "./look";
-import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
+import { Heading, Row, Toggle } from "./controls";
 import { IslandSection } from "./IslandSection";
 import { LookSection } from "./LookSection";
 import { ModulesSection } from "./ModulesSection";
@@ -33,7 +31,6 @@ const SECTIONS = [
   { id: "look", label: "Внешний вид" },
   { id: "keys", label: "Клавиши" },
   { id: "modules", label: "Модули" },
-  { id: "weather", label: "Погода" },
   { id: "discord", label: "Discord" },
   { id: "about", label: "О Lumen" },
 ] as const;
@@ -46,7 +43,6 @@ const SECTION_ICONS: Record<SectionId, ReactNode> = {
   discord: <path d="M8 7.5a14 14 0 0 1 8 0M7 17c3 1.4 7 1.4 10 0M5.5 7.5C3.8 10.6 3.3 13.5 3.8 16.6 5.3 17.8 6.8 18.5 8.3 19l1-2M18.5 7.5c1.7 3.1 2.2 6 1.7 9.1-1.5 1.2-3 1.9-4.5 2.4l-1-2M9.5 12.5h.01M14.5 12.5h.01" />,
   keys: <path d="M4 7h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zM7 10.5h.01M10.5 10.5h.01M14 10.5h.01M17 10.5h.01M8 14h8" />,
   look: <path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />,
-  weather: <path d="M7 18a4 4 0 0 1-.6-8A6 6 0 0 1 18 9.5a4.3 4.3 0 0 1-.5 8.5z" />,
   about: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01" />,
 };
 
@@ -129,8 +125,6 @@ export function SettingsWindow() {
             <KeysSection hotkeys={settings.hotkeys} />
           ) : section === "modules" ? (
             <ModulesSection settings={settings} />
-          ) : section === "weather" ? (
-            <WeatherSection settings={settings} />
           ) : section === "discord" ? (
             <DiscordSection settings={settings} />
           ) : (
@@ -173,6 +167,7 @@ function GeneralSection({ settings }: { settings: Settings }) {
 
   return (
     <>
+      <Heading>Запуск</Heading>
       <div className="st-card">
         <Row
           title="Запускать вместе с Windows"
@@ -186,6 +181,7 @@ function GeneralSection({ settings }: { settings: Settings }) {
         </Row>
       </div>
 
+      <Heading>Приложения</Heading>
       <div className="st-card">
         <Row title="ИИ-приложение" hint="Открывается из поиска; вопрос копируется — вставь его через Ctrl+V">
           <select
@@ -218,7 +214,7 @@ function GeneralSection({ settings }: { settings: Settings }) {
         <BrowserRow chosen={settings.browser} />
       </div>
 
-      <div className="st-heading">Вкладки острова</div>
+      <Heading>Вкладки острова</Heading>
       <div className="st-card">
         {TABS.map((tab) => {
           const always = tab.id === "launcher";
@@ -442,110 +438,3 @@ function useBusyHotkeys(): Action[] {
   return busy;
 }
 
-/* Погода */
-
-const REFRESH = [10, 15, 30, 60];
-
-function WeatherSection({ settings }: { settings: Settings }) {
-  const { city, weather } = settings;
-  const [picking, setPicking] = useState(!city);
-  const [query, setQuery] = useState("");
-  const results = useCitySearch(query);
-
-  const pick = (c: City | null) => {
-    setCity(c);
-    setQuery("");
-    setPicking(!c);
-  };
-
-  return (
-    <>
-      {city && !picking ? (
-        <div className="st-card">
-          <Row title={city.name} hint={city.area}>
-            <div className="st-buttons">
-              <button className="st-button" onClick={() => setPicking(true)}>
-                Сменить
-              </button>
-              <button className="st-button quiet" onClick={() => pick(null)}>
-                Убрать
-              </button>
-            </div>
-          </Row>
-        </div>
-      ) : (
-        <div className="st-card st-city-search">
-          <label className="st-input">
-            <svg viewBox="0 0 24 24" aria-hidden>
-              <path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />
-            </svg>
-            <input
-              autoFocus
-              value={query}
-              placeholder="Город, например Казань"
-              spellCheck={false}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && results[0]) pick(results[0]);
-                if (e.key === "Escape" && city) setPicking(false);
-              }}
-            />
-          </label>
-          {results.length > 0 && (
-            <ul className="st-results">
-              {results.map((c) => (
-                <li key={`${c.latitude},${c.longitude}`}>
-                  <button onClick={() => pick(c)}>
-                    <span>{c.name}</span>
-                    <span className="st-row-hint">{c.area}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      <Heading>Прогноз</Heading>
-      <div className="st-card">
-        <Row title="Единицы">
-          <Segmented
-            value={weather.units}
-            options={[
-              { value: "c", label: "°C" },
-              { value: "f", label: "°F" },
-            ]}
-            onChange={(units) => updateSettings({ weather: { units } })}
-          />
-        </Row>
-        <Row title="Предупреждать о дожде" hint="Если вероятность в ближайший час не ниже">
-          <Slider
-            value={weather.rainChance}
-            min={30}
-            max={90}
-            step={5}
-            format={(v) => `${v}%`}
-            onChange={(rainChance) => updateSettings({ weather: { rainChance } })}
-          />
-        </Row>
-        <Row title="Обновлять">
-          <select
-            className="st-select"
-            value={weather.refreshMinutes}
-            onChange={(e) => updateSettings({ weather: { refreshMinutes: Number(e.target.value) } })}
-          >
-            {REFRESH.map((m) => (
-              <option key={m} value={m}>
-                {`раз в ${m} мин`}
-              </option>
-            ))}
-          </select>
-        </Row>
-      </div>
-      <div className="st-footnote">
-        Прогноз от <button className="st-link" onClick={() => open("https://open-meteo.com")}>Open-Meteo</button>.
-      </div>
-    </>
-  );
-}
-
-const open = (url: string) => (isTauri ? openUrl(url) : window.open(url, "_blank"));

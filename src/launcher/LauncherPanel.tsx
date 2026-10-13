@@ -9,7 +9,6 @@ import { formatShortcut, Hotkeys, openSettings, SearchEngine } from "../settings
 import { ENGINES } from "./engines";
 import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
 
-const MAX_APPS = 5;
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
 interface Result {
@@ -46,7 +45,14 @@ function AppIcon({ app }: { app: App }) {
   );
 }
 
-function buildResults(query: string, apps: App[], ai: App | null, hotkeys: Hotkeys, engine: SearchEngine): Result[] {
+function buildResults(
+  query: string,
+  apps: App[],
+  ai: App | null,
+  hotkeys: Hotkeys,
+  engine: SearchEngine,
+  maxApps: number,
+): Result[] {
   const q = query.trim();
   const out: Result[] = [];
 
@@ -125,7 +131,7 @@ function buildResults(query: string, apps: App[], ai: App | null, hotkeys: Hotke
     .map((app) => ({ app, score: fuzzyScore(app.name, q) }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_APPS)
+    .slice(0, maxApps)
     .forEach(({ app }) =>
       out.push({
         key: `app:${app.id}`,
@@ -162,7 +168,13 @@ function buildResults(query: string, apps: App[], ai: App | null, hotkeys: Hotke
   return out;
 }
 
-export function LauncherPanel({ open, hotkeys, engine }: { open: boolean; hotkeys: Hotkeys; engine: SearchEngine }) {
+export function LauncherPanel({ open, hotkeys, engine, maxApps }: {
+  open: boolean;
+  hotkeys: Hotkeys;
+  engine: SearchEngine;
+  /** How many programs a search lists at most. */
+  maxApps: number;
+}) {
   const { apps, ai } = useApps();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -170,8 +182,8 @@ export function LauncherPanel({ open, hotkeys, engine }: { open: boolean; hotkey
   const list = useRef<HTMLUListElement>(null);
 
   const results = useMemo(
-    () => buildResults(query, apps, ai, hotkeys, engine),
-    [query, apps, ai, hotkeys, engine],
+    () => buildResults(query, apps, ai, hotkeys, engine, maxApps),
+    [query, apps, ai, hotkeys, engine, maxApps],
   );
 
   // Fresh, focused search box every time the launcher opens.

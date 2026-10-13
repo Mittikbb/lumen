@@ -28,7 +28,7 @@ import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MIC_OFF, MiniCall } from "../discord/CallPanel";
 import { CallDrop, notifyWidth } from "../discord/CallDrop";
 import { DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, useDropMotion } from "./Drop";
-import { useTimer } from "../timer/timer";
+import { setTimerSound, useTimer } from "../timer/timer";
 import { TimerDrop, timerWidth } from "../timer/TimerDrop";
 import { useCallEvents } from "../discord/useCallEvents";
 import type { MotionPrefs } from "../settings/useSettings";
@@ -124,7 +124,7 @@ export function Island() {
   const voice = discord.voice;
   const blur = moves.blur && !moves.reduced;
   const noticeMs = (ms: number) => ms * notices.duration;
-  useLook(look, media?.art);
+  useLook(look, media?.art, !!media?.playing);
   const reactive = useAudioLevels() && !!media?.playing && look?.beat !== false;
   const track = media ? trackKey(media) : "";
   const [hovered, setHovered] = useState(false);
@@ -212,6 +212,7 @@ export function Island() {
   // A timer from search ("таймер 10м") flows out of the right end and stays
   // out while it runs; cancelled, it melts back in before it goes.
   const { timer: liveTimer, left: timerLeft } = useTimer();
+  useEffect(() => setTimerSound(prefs.timer.sound, prefs.timer.volume), [prefs.timer.sound, prefs.timer.volume]);
   const shownTimer = useLingering(liveTimer, 600);
   const timerEdge = dropGeometry(center, top, collapsedSize.width, shape.height, "right").edge;
   const timerState: DropState = expanded ? "merged" : liveTimer && !drag.dragging ? "notify" : "rest";
@@ -266,12 +267,15 @@ export function Island() {
     if (hovered && dropCall) setTab(fromDrop.current ? "call" : chosenTab.current);
   }, [hovered]);
   const onlyOnDrop = onDrop && !cursor?.inside;
+  const byClick = shape.openOn === "click";
   useEffect(() => {
     if (inside === hovered) return;
+    // Opened by a click instead: the pointer coming in does nothing, leaving still closes it.
+    if (byClick && inside) return;
     const open = onlyOnDrop ? Math.max(shape.openDelay, DROP_OPEN_DELAY) : shape.openDelay;
     const t = setTimeout(() => setHovered(inside), inside ? open : shape.closeDelay);
     return () => clearTimeout(t);
-  }, [inside, hovered, onlyOnDrop, pokes, shape.openDelay, shape.closeDelay]);
+  }, [inside, hovered, onlyOnDrop, byClick, pokes, shape.openDelay, shape.closeDelay]);
 
   // Liquid lean: while collapsed, the island stretches toward a nearby pointer.
   const x = useSpring(0, leanSpring);
@@ -474,6 +478,7 @@ export function Island() {
       <motion.div
         ref={ref}
         {...drag.handlers}
+        onClick={() => byClick && !expanded && setHovered(true)}
         className={`island${liquid ? " glowless" : glow}${drag.ctrl ? " grab" : ""}${drag.dragging ? " dragging" : ""}`}
         initial={false}
         animate={{
@@ -555,7 +560,7 @@ export function Island() {
               ) : tab === "clipboard" ? (
                 <ClipboardPanel entries={clips ?? []} />
               ) : (
-                <LauncherPanel open={launcherOpen} hotkeys={hotkeys} engine={prefs.search.engine} />
+                <LauncherPanel open={launcherOpen} hotkeys={hotkeys} engine={prefs.search.engine} maxApps={prefs.search.apps} />
               )}
             </motion.div>
           ) : (

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { ENGINES } from "../launcher/engines";
 import { playerName } from "../media/useMedia";
+import { playChime } from "../timer/timer";
+import { WeatherSettings } from "./WeatherSettings";
 import { Heading, Row, Slider, TextField, Toggle } from "./controls";
-import { PlayerPrefs, SearchEngine, Settings, updateSettings } from "./useSettings";
+import { PlayerPrefs, SearchEngine, Settings, TimerPrefs, updateSettings } from "./useSettings";
 
 const KEEP_DAYS = [
   { value: 0, label: "Всегда" },
@@ -11,9 +13,10 @@ const KEEP_DAYS = [
   { value: 30, label: "Месяц" },
 ];
 
-/** Модули: clipboard history, shelf, web search and media. */
+/** Модули: clipboard history, shelf, search, weather, media, players and the timer. */
 export function ModulesSection({ settings }: { settings: Settings }) {
-  const { clipboard, shelf, search } = settings;
+  const { clipboard, shelf, search, timer } = settings;
+  const setTimer = (patch: Partial<TimerPrefs>) => updateSettings({ timer: patch });
 
   return (
     <>
@@ -74,7 +77,19 @@ export function ModulesSection({ settings }: { settings: Settings }) {
             ))}
           </select>
         </Row>
+        <Row title="Сколько программ показывать" hint="Найденных по названию, в одном поиске">
+          <Slider
+            value={search.apps}
+            min={3}
+            max={10}
+            format={(v) => `${v}`}
+            onChange={(apps) => updateSettings({ search: { apps } })}
+          />
+        </Row>
       </div>
+
+      <Heading>Погода</Heading>
+      <WeatherSettings settings={settings} />
 
       <Heading>Медиа</Heading>
       <div className="st-card">
@@ -88,6 +103,30 @@ export function ModulesSection({ settings }: { settings: Settings }) {
 
       <Heading>Плееры</Heading>
       <Players players={settings.players} />
+
+      <Heading>Таймер</Heading>
+      <div className="st-card">
+        <Row title="Звук по окончании" hint="«таймер 10м» в поиске — капля справа от острова">
+          <Toggle on={timer.sound} onChange={(sound) => setTimer({ sound })} />
+        </Row>
+        {timer.sound && (
+          <Row title="Громкость звука">
+            <span className="st-player">
+              <Slider
+                value={Math.round(timer.volume * 100)}
+                min={10}
+                max={100}
+                step={10}
+                format={(v) => `${v}%`}
+                onChange={(v) => setTimer({ volume: v / 100 })}
+              />
+              <button className="st-button quiet" onClick={() => playChime(timer.volume)}>
+                Послушать
+              </button>
+            </span>
+          </Row>
+        )}
+      </div>
     </>
   );
 }

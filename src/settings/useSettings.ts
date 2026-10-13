@@ -5,7 +5,7 @@ import { isTauri } from "../island/env";
 import type { City } from "../weather/useWeather";
 
 export type GlowLevel = "off" | "soft" | "normal" | "bright";
-export type Accent = "sunset" | "rose" | "violet" | "midnight" | "ocean" | "mint" | "ice";
+export type Accent = "sunset" | "rose" | "violet" | "midnight" | "ocean" | "mint" | "ice" | "custom";
 export type Speed = "slow" | "normal" | "fast";
 export type Bounce = "calm" | "normal" | "springy";
 export type SearchEngine = "google" | "yandex" | "duckduckgo" | "bing";
@@ -26,12 +26,22 @@ export interface Hotkeys {
 
 /** "glow" breathes around the capsule; "flow" ("Перелив") runs its colours sideways along it. */
 export type GlowStyle = "glow" | "flow";
+/** How fast the glow breathes or flows. */
+export type GlowPace = "slow" | "normal" | "fast";
 
 export interface Look {
   glow: GlowLevel;
   style: GlowStyle;
+  /** How far the glow reaches, on top of its strength (1 = as is). */
+  spread: number;
+  pace: GlowPace;
+  /** Glow only while music plays. */
+  musicOnly: boolean;
   /** Glow palette when there's no album art to take colours from. */
   accent: Accent;
+  /** The two tones of the "custom" palette, as #rrggbb. */
+  customA: string;
+  customB: string;
   /** Tint the glow with the album art of the playing track. */
   artColors: boolean;
   /** Pulse with the music instead of breathing at a fixed pace. */
@@ -49,6 +59,8 @@ export interface IslandPrefs {
   radius: number;
   /** Gap between the top of the screen and the island. */
   offsetTop: number;
+  /** "hover": opens when the pointer rests on it; "click": only on a click. */
+  openOn: "hover" | "click";
   openDelay: number;
   closeDelay: number;
   /** How hard the collapsed island leans toward the pointer (0..2). */
@@ -135,6 +147,13 @@ export interface DiscordPrefs {
   presence: boolean;
 }
 
+/** What a finished timer sounds like. */
+export interface TimerPrefs {
+  sound: boolean;
+  /** 0–1. */
+  volume: number;
+}
+
 export interface MediaPrefs {
   volumeSlider: boolean;
 }
@@ -168,7 +187,9 @@ export interface Settings {
   clipboard: ClipboardPrefs;
   shelf: { limit: number };
   weather: WeatherPrefs;
-  search: { engine: SearchEngine };
+  /** `apps`: how many programs a search lists at most. */
+  search: { engine: SearchEngine; apps: number };
+  timer: TimerPrefs;
   discord: DiscordPrefs;
   /** `install`: put a found update in by itself right after start. */
   updates: { auto: boolean; install: boolean };
@@ -194,13 +215,26 @@ export const DEFAULT_SETTINGS: Settings = {
   browser: null,
   hiddenTabs: [],
   city: null,
-  look: { glow: "normal", style: "glow", accent: "sunset", artColors: true, beat: true, lean: true },
+  look: {
+    glow: "normal",
+    style: "glow",
+    spread: 1,
+    pace: "normal",
+    musicOnly: false,
+    customA: "#7cf0c8",
+    customB: "#5a6cff",
+    accent: "sunset",
+    artColors: true,
+    beat: true,
+    lean: true,
+  },
   island: {
     width: 220,
     height: 40,
     expandedWidth: 560,
     radius: 30,
     offsetTop: 12,
+    openOn: "hover",
     openDelay: 120,
     closeDelay: 380,
     pull: 1,
@@ -220,7 +254,8 @@ export const DEFAULT_SETTINGS: Settings = {
   clipboard: { limit: 60, keepDays: 0, ignore: [] },
   shelf: { limit: 40 },
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },
-  search: { engine: "google" },
+  search: { engine: "google", apps: 5 },
+  timer: { sound: true, volume: 0.6 },
   discord: { enabled: false, clientId: "", clientSecret: "", voice: true, presence: true },
   updates: { auto: true, install: true },
   media: { volumeSlider: true },

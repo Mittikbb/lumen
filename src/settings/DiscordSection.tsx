@@ -46,6 +46,7 @@ export function DiscordSection({ settings }: { settings: Settings }) {
 
   return (
     <>
+      <Heading>Подключение</Heading>
       <div className="st-card">
         <Row
           title="Подключение к Discord"

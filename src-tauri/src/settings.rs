@@ -236,6 +236,10 @@ pub struct Look {
     beat: bool,
     /// Stretch toward an approaching pointer.
     lean: bool,
+    /// Fields only the frontend reads (glow size, pace, own colours...),
+    /// kept as they are so new ones don't need a change here.
+    #[serde(flatten)]
+    rest: Map<String, Value>,
 }
 
 impl Default for Look {
@@ -247,6 +251,7 @@ impl Default for Look {
             art_colors: true,
             beat: true,
             lean: true,
+            rest: Map::new(),
         }
     }
 }
