@@ -204,6 +204,11 @@ html.settings-root #root {
   color: var(--island-fg-muted);
 }
 
+/* A second line in a footnote. */
+.st-footnote-note {
+  margin-top: 4px;
+}
+
 .st-link {
   padding: 0;
   border: 0;

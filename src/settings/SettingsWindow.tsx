@@ -335,8 +335,8 @@ function KeysSection({ hotkeys }: { hotkeys: Hotkeys }) {
             Вернуть стандартные
           </button>
         )}
-        <div style={{ marginTop: 4 }}>
-          <b>не советую ставить Alt + F3 [P.S. Lackyhy]</b>
+        <div className="st-footnote-note">
+          Не советуем ставить Alt+F3: в некоторых программах это сочетание уже занято. P.S. Lackyhy
         </div>
       </div>
     </>
