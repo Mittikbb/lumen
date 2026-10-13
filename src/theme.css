@@ -743,8 +743,246 @@ body,
 /* Launcher */
 .panel.launcher {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
+}
+
+.launcher-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.panel.launcher.has-detail .launcher-main {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Droplet Side Card */
+.droplet-card {
+  width: 290px;
+  flex: none;
+  margin: 6px 6px 6px 4px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--droplet-border, var(--droplet-accent, var(--glow-a))) 32%, rgba(255, 255, 255, 0.1));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 45%, color-mix(in srgb, var(--droplet-border, var(--droplet-accent, var(--glow-a))) 14%, transparent) 100%),
+    color-mix(in srgb, var(--island-bg) 88%, black);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    -8px 0 28px -6px rgba(0, 0, 0, 0.55),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.35),
+    0 0 32px -4px color-mix(in srgb, var(--droplet-border, var(--droplet-accent, var(--glow-a))) 24%, transparent);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  position: relative;
+  overflow-y: auto;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.droplet-card.no-blur {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--island-bg) 95%, black);
+}
+
+.droplet-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.38), transparent);
+  pointer-events: none;
+}
+
+.droplet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.droplet-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.droplet-badge {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  border-radius: 9px;
+  line-height: 1.2;
+  box-shadow: 0 0 14px -2px color-mix(in srgb, var(--droplet-accent, currentColor) 36%, transparent);
+}
+
+.droplet-phrase {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--island-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.droplet-close {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--island-fg-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+  transition: all 0.15s ease;
+}
+
+.droplet-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.droplet-close:active {
+  transform: scale(0.92);
+}
+
+.droplet-close svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+
+.droplet-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.droplet-name-ru {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--island-fg);
+}
+
+.droplet-category-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--droplet-accent, var(--island-fg-muted));
+}
+
+.droplet-category-label::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  flex: none;
+}
+
+.droplet-desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+  word-break: break-word;
+}
+
+.droplet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.droplet-btn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.droplet-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--island-fg);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.droplet-btn:hover {
+  background: color-mix(in srgb, var(--droplet-accent, var(--glow-a)) 20%, rgba(255, 255, 255, 0.1));
+  border-color: color-mix(in srgb, var(--droplet-accent, var(--glow-a)) 40%, transparent);
+}
+
+.droplet-btn:active {
+  transform: scale(0.96);
+}
+
+.droplet-btn.primary {
+  background: color-mix(in srgb, var(--droplet-accent, var(--glow-a)) 24%, rgba(255, 255, 255, 0.08));
+  border-color: color-mix(in srgb, var(--droplet-accent, var(--glow-a)) 48%, transparent);
+  color: #fff;
+}
+
+.droplet-btn.copied {
+  background: rgba(74, 222, 128, 0.22);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #4ade80;
+}
+
+.droplet-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+
+.droplet-kbd-hint {
+  font-size: 10px;
+  color: var(--island-fg-muted);
+  text-align: center;
+  margin-top: 2px;
+}
+
+.droplet-kbd-hint kbd {
+  font: inherit;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .search-box {
@@ -868,6 +1106,90 @@ body,
 .result-hint {
   font-size: 11px;
   color: var(--island-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-http-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.http-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  flex: none;
+  line-height: 1.3;
+}
+
+.http-tag-1xx {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.http-tag-2xx {
+  background: rgba(74, 222, 128, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+}
+
+.http-tag-3xx {
+  background: rgba(250, 204, 21, 0.16);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+
+.http-tag-4xx {
+  background: rgba(251, 146, 60, 0.16);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.35);
+}
+
+.http-tag-5xx {
+  background: rgba(248, 113, 113, 0.16);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.http-tag-help {
+  background: rgba(168, 85, 247, 0.16);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.http-tag-prot {
+  background: rgba(99, 102, 241, 0.16);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+.http-phrase {
+  font-weight: 600;
+  color: var(--island-fg);
+}
+
+.http-sep {
+  color: var(--island-fg-muted);
+  opacity: 0.5;
+}
+
+.http-name-ru {
+  color: var(--island-fg-muted);
+  font-weight: 400;
+}
+
+.result.selected .http-name-ru {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Short notice in the collapsed island */

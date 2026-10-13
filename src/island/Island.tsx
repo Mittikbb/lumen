@@ -12,6 +12,7 @@ import { clipPreview, useClipboard, useCopyEvents } from "../clipboard/useClipbo
 import { ClipboardPanel } from "../clipboard/ClipboardPanel";
 import { LauncherPanel } from "../launcher/LauncherPanel";
 import { launcher, useLauncherOpen } from "../launcher/useLauncher";
+import type { NetworkSearchResult } from "../launcher/httpCodes";
 import { useFileDrop, useShelf } from "../shelf/useShelf";
 import { ShelfPanel } from "../shelf/ShelfPanel";
 import { setCity, useWeather } from "../weather/useWeather";
@@ -132,6 +133,7 @@ export function Island() {
   const [hovered, setHovered] = useState(false);
   const visible = useVisibility();
   const [tab, setTab] = useState<TabId>("media");
+  const [detailItem, setDetailItem] = useState<NetworkSearchResult | null>(null);
   const clips = useClipboard();
   const launcherOpen = useLauncherOpen();
   const shelfItems = useShelf();
@@ -372,10 +374,19 @@ export function Island() {
     });
   });
 
+  useEffect(() => {
+    if (!launcherOpen || tab !== "launcher") {
+      setDetailItem(null);
+    }
+  }, [launcherOpen, tab]);
+
   const size = expanded
     ? {
         // The extra "Звонок" tab needs room, or the clock gets cut off.
-        width: shape.expandedWidth + (showsTab("call") ? CALL_TAB_WIDTH : 0),
+        width:
+          shape.expandedWidth +
+          (showsTab("call") ? CALL_TAB_WIDTH : 0) +
+          (tab === "launcher" && detailItem ? 295 : 0),
         height: EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT,
       }
     : collapsedSize;
@@ -567,7 +578,16 @@ export function Island() {
               ) : tab === "clipboard" ? (
                 <ClipboardPanel entries={clips ?? []} />
               ) : (
-                <LauncherPanel open={launcherOpen} hotkeys={hotkeys} engine={prefs.search.engine} maxApps={prefs.search.apps} />
+                <LauncherPanel
+                  open={launcherOpen}
+                  hotkeys={hotkeys}
+                  engine={prefs.search.engine}
+                  maxApps={prefs.search.apps}
+                  detailItem={detailItem}
+                  onDetailChange={setDetailItem}
+                  codeBorderColor={prefs.advanced?.codeBorderColor ?? "code"}
+                  dropletGlassBlur={prefs.advanced?.dropletGlassBlur ?? true}
+                />
               )}
             </motion.div>
           ) : (

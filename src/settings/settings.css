@@ -968,3 +968,80 @@ html.settings-root #root {
   border: 0;
   border-radius: 5px;
 }
+
+/* Droplet preview in Advanced settings */
+.st-droplet-preview {
+  margin: 4px 16px 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--preview-accent, var(--glow-a)) 34%, rgba(255, 255, 255, 0.1));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 45%, color-mix(in srgb, var(--preview-accent, var(--glow-a)) 14%, transparent) 100%),
+    rgba(255, 255, 255, 0.03);
+  box-shadow:
+    0 4px 18px -4px rgba(0, 0, 0, 0.4),
+    0 0 22px -3px color-mix(in srgb, var(--preview-accent, var(--glow-a)) 22%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.25s ease;
+}
+
+.st-preview-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: rgba(74, 222, 128, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  box-shadow: 0 0 10px -2px rgba(74, 222, 128, 0.35);
+}
+
+.st-preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--island-fg);
+}
+
+.st-preview-sub {
+  font-size: 11px;
+  color: var(--island-fg-muted);
+}
+
+.st-btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--island-fg);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.st-btn-link:hover {
+  background: color-mix(in srgb, var(--glow-a) 18%, rgba(255, 255, 255, 0.1));
+  border-color: color-mix(in srgb, var(--glow-a) 40%, transparent);
+  color: #fff;
+}
+
+.st-btn-link svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+

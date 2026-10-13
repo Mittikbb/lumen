@@ -168,6 +168,15 @@ export interface PlayerPrefs {
   names: Record<string, string>;
 }
 
+export type CodeBorderColor = "code" | "theme";
+
+export interface AdvancedPrefs {
+  /** Edge and glow color of the droplet window on Enter: "code" (category color) or "theme" (program accent). */
+  codeBorderColor: CodeBorderColor;
+  /** Backdrop blur effect for the droplet card. */
+  dropletGlassBlur: boolean;
+}
+
 export interface Settings {
   hotkeys: Hotkeys;
   /** Start menu AppID of the AI app; null picks the first one installed. */
@@ -197,6 +206,7 @@ export interface Settings {
   players: PlayerPrefs;
   /** Show downloads on the island; off by default. */
   downloads: { enabled: boolean };
+  advanced: AdvancedPrefs;
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] | null ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -263,6 +273,10 @@ export const DEFAULT_SETTINGS: Settings = {
   media: { volumeSlider: true },
   players: { known: [], hidden: [], names: {} },
   downloads: { enabled: false },
+  advanced: {
+    codeBorderColor: "code",
+    dropletGlassBlur: true,
+  },
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
