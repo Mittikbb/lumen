@@ -335,6 +335,9 @@ function KeysSection({ hotkeys }: { hotkeys: Hotkeys }) {
             Вернуть стандартные
           </button>
         )}
+        <div style={{ marginTop: 4 }}>
+          <b>не советую ставить Alt + F3 [P.S. Lackyhy]</b>
+        </div>
       </div>
     </>
   );
