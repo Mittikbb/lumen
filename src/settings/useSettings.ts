@@ -195,6 +195,8 @@ export interface Settings {
   updates: { auto: boolean; install: boolean };
   media: MediaPrefs;
   players: PlayerPrefs;
+  /** Show downloads on the island; off by default. */
+  downloads: { enabled: boolean };
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] | null ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -260,6 +262,7 @@ export const DEFAULT_SETTINGS: Settings = {
   updates: { auto: true, install: true },
   media: { volumeSlider: true },
   players: { known: [], hidden: [], names: {} },
+  downloads: { enabled: false },
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

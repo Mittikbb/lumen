@@ -31,6 +31,8 @@ import { DropNeck, DropState, LiquidFilter, dropGeometry, dropHover, useDropMoti
 import { setTimerSound, useTimer } from "../timer/timer";
 import { TimerDrop, timerWidth } from "../timer/TimerDrop";
 import { useCallEvents } from "../discord/useCallEvents";
+import { useDownloads } from "../downloads/useDownloads";
+import { DownloadView } from "../downloads/DownloadView";
 import type { MotionPrefs } from "../settings/useSettings";
 
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
@@ -140,6 +142,11 @@ export function Island() {
   const showsTab = (id: TabId) => tabs.some((t) => t.id === id);
   // A call in the collapsed island itself; the "drop" style keeps it outside.
   const miniCall = !!voice && showsTab("call") && prefs.call.style !== "drop";
+  // Downloads from the Downloads folder, when switched on in the settings.
+  const downloads = useDownloads();
+  const downloading = prefs.downloads.enabled && (downloads.active.length > 0 || !!downloads.done);
+  // The music shortcuts: an arrow on the side the track moves to.
+  const skip = useMediaKeys();
   const [notice, setNotice] = useState<{
     title: string;
     detail: string;
@@ -178,7 +185,7 @@ export function Island() {
 
   // Collapsed size: wider for a notice or a call shown inside the island.
   const collapsedSize = {
-    width: notice ? Math.max(NOTICE_WIDTH, shape.width + 70) : miniCall ? Math.max(shape.width, 250) : shape.width,
+    width: notice || downloading ? Math.max(NOTICE_WIDTH, shape.width + 70) : miniCall ? Math.max(shape.width, 250) : shape.width,
     height: shape.height,
   };
 
@@ -588,17 +595,22 @@ export function Island() {
                   <span className="notice-title">{notice.title}</span>
                   <span className="notice-detail">{notice.detail}</span>
                 </motion.div>
+              ) : downloading ? (
+                <DownloadView active={downloads.active} done={downloads.done} reduced={moves.reduced} />
               ) : miniCall && voice ? (
                 <MiniCall voice={voice} speakerRight={prefs.call.style === "right"} />
               ) : media && rest.track ? (
                 <>
-                  <AnimatePresence mode="popLayout" initial={false}>
+                  {/* After a skip shortcut the track slides the way it went; otherwise it rises. */}
+                  <AnimatePresence mode="popLayout" initial={false} custom={skip?.dir ?? 0}>
                     <motion.div
                       key={track}
                       className="mini-track"
-                      initial={{ opacity: 0, y: 10, filter: fade(4) }}
-                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, y: -10, filter: fade(4) }}
+                      custom={skip?.dir ?? 0}
+                      variants={TRACK_SLIDE}
+                      initial="enter"
+                      animate={{ opacity: 1, x: 0, y: 0, filter: "blur(0px)" }}
+                      exit="leave"
                       transition={{ duration: moves.reduced ? 0 : 0.3 }}
                     >
                       <Art src={media.art} className="mini-art" />
@@ -624,6 +636,20 @@ export function Island() {
             </motion.div>
           )}
         </AnimatePresence>
+        <AnimatePresence>
+          {skip && !moves.reduced && (
+            <motion.span
+              key={skip.key}
+              className={`skip-arrow ${skip.dir > 0 ? "next" : "previous"}`}
+              initial={{ opacity: 0, x: -8 * skip.dir }}
+              animate={{ opacity: [0, 1, 1, 0], x: [-8 * skip.dir, 0, 4 * skip.dir, 12 * skip.dir] }}
+              transition={{ duration: 0.7, times: [0, 0.25, 0.6, 1], ease: "easeOut" }}
+              aria-hidden
+            >
+              {SKIP_ICON}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </motion.div>
     </motion.div>
   );
@@ -638,6 +664,48 @@ function useLingering<T>(value: T | null, ms: number): T | null {
     return () => clearTimeout(t);
   }, [value, ms]);
   return value ?? kept;
+}
+
+const SKIP_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <path d="M6 7l5 5-5 5M13 7l5 5-5 5" />
+  </svg>
+);
+
+/**
+ * The mini track's way in and out: from the side a skip went (`dir` 1 next,
+ * -1 previous), or rising from below when the track changed by itself.
+ */
+const TRACK_SLIDE = {
+  enter: (dir: number) => (dir ? { opacity: 0, x: 28 * dir, y: 0, filter: "blur(4px)" } : { opacity: 0, x: 0, y: 10, filter: "blur(4px)" }),
+  leave: (dir: number) => (dir ? { opacity: 0, x: -28 * dir, y: 0, filter: "blur(4px)" } : { opacity: 0, x: 0, y: -10, filter: "blur(4px)" }),
+};
+
+/** How long after a skip shortcut the next track change counts as that skip. */
+const SKIP_MS = 2500;
+
+/**
+ * The last next/previous track shortcut (`dir` 1 or -1), for the arrow and
+ * the slide; it fades out of relevance after SKIP_MS.
+ */
+function useMediaKeys() {
+  const [skip, setSkip] = useState<{ dir: number; key: number } | null>(null);
+  useEffect(() => {
+    if (!isTauri) return;
+    const unlisten = listen<string>("lumen://media-key", (e) => {
+      const dir = e.payload === "next" ? 1 : e.payload === "previous" ? -1 : 0;
+      if (dir) setSkip({ dir, key: Date.now() });
+    });
+    return () => {
+      unlisten.then((off) => off());
+    };
+  }, []);
+  useEffect(() => {
+    if (!skip) return;
+    const t = setTimeout(() => setSkip(null), SKIP_MS);
+    return () => clearTimeout(t);
+  }, [skip]);
+  return skip;
 }
 
 /**

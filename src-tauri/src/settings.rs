@@ -41,9 +41,17 @@ pub struct Settings {
     pub discord: DiscordPrefs,
     pub updates: UpdatePrefs,
     pub players: PlayerPrefs,
+    pub downloads: DownloadPrefs,
     /// Frontend-only groups, kept untouched.
     #[serde(flatten)]
     pub rest: Map<String, Value>,
+}
+
+/// Downloads shown on the island; off until switched on.
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DownloadPrefs {
+    pub enabled: bool,
 }
 
 /// Media players by their SMTC app id: the ones seen playing, the ones the

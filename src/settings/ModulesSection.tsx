@@ -104,6 +104,19 @@ export function ModulesSection({ settings }: { settings: Settings }) {
       <Heading>Плееры</Heading>
       <Players players={settings.players} />
 
+      <Heading>Загрузки</Heading>
+      <div className="st-card">
+        <Row
+          title="Показывать загрузки"
+          hint="Пока браузер качает файл в «Загрузки», остров показывает имя, размер и скорость; готовый файл — по клику в папке"
+        >
+          <Toggle
+            on={settings.downloads.enabled}
+            onChange={(enabled) => updateSettings({ downloads: { enabled } })}
+          />
+        </Row>
+      </div>
+
       <Heading>Таймер</Heading>
       <div className="st-card">
         <Row title="Звук по окончании" hint="«таймер 10м» в поиске — капля справа от острова">

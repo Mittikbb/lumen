@@ -905,6 +905,150 @@ body,
   color: var(--island-fg-muted);
 }
 
+/* A download in the collapsed island: name, size and speed, and a light
+   running along the bottom edge until it's in. */
+/* Full height: its slide-in transform makes it the box the bar sits in. */
+.download {
+  position: relative;
+  align-self: stretch;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.download.done {
+  cursor: pointer;
+}
+
+.download-icon {
+  display: grid;
+  flex: none;
+  color: var(--glow-a);
+}
+
+.download-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The arrow keeps dropping while the file comes in. */
+.download:not(.done) .download-icon svg {
+  animation: download-drop 1.4s ease-in-out infinite;
+}
+
+.download-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.download-meta {
+  flex: none;
+  margin-left: auto;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--island-fg-muted);
+}
+
+.download-bar {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.download-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--glow-a), transparent);
+  animation: download-run 1.3s ease-in-out infinite;
+}
+
+.download-bar.still::after {
+  animation: none;
+  left: 35%;
+}
+
+/* Done: the light fills the edge and fades. */
+.download-bar.full::after {
+  width: 100%;
+  background: var(--glow-a);
+  animation: download-full 1.6s ease-out forwards;
+}
+
+@keyframes download-drop {
+  0%, 100% { transform: translateY(-2px); }
+  50% { transform: translateY(2px); }
+}
+
+@keyframes download-run {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+
+@keyframes download-full {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* Skip shortcuts: an arrow at the edge the track went to. */
+.skip-arrow {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  margin-top: -12px;
+  padding: 3px;
+  border-radius: 50%;
+  color: var(--glow-a);
+  /* The island's own colour underneath, so it cleanly covers what's there. */
+  background: var(--island-bg);
+  box-shadow: 0 0 8px 6px var(--island-bg);
+  pointer-events: none;
+}
+
+.skip-arrow svg {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow-a) 60%, transparent));
+}
+
+.skip-arrow.next {
+  right: 8px;
+}
+
+.skip-arrow.previous {
+  left: 8px;
+}
+
+/* Flipped inside: the element's own transform belongs to the slide. */
+.skip-arrow.previous svg {
+  transform: scaleX(-1);
+}
+
+.skip-arrow svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Shelf */
 .panel.shelf {
   position: relative;

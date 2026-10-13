@@ -3,6 +3,7 @@ mod browser;
 mod capture;
 mod clipboard;
 mod discord;
+mod downloads;
 mod hotkeys;
 mod launcher;
 mod media;
@@ -43,6 +44,7 @@ pub fn run() {
         .manage(hotkeys::Bindings::default())
         .manage(discord::Discord::default())
         .manage(updates::Updates::default())
+        .manage(downloads::Downloads::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
@@ -98,6 +100,7 @@ pub fn run() {
             updates::update_install,
             hotkeys::hotkeys_suspend,
             hotkeys::hotkeys_busy,
+            downloads::downloads_reveal,
         ])
         .setup(|app| {
             let window = app
@@ -117,6 +120,7 @@ pub fn run() {
             tray::init(app.handle())?;
             discord::init(app.handle());
             updates::spawn_checker(app.handle().clone());
+            downloads::spawn_watcher(app.handle().clone());
 
             Ok(())
         })
