@@ -11,6 +11,7 @@ import { IslandSection } from "./IslandSection";
 import { LookSection } from "./LookSection";
 import { ModulesSection } from "./ModulesSection";
 import { DiscordSection } from "./DiscordSection";
+import { AdvancedSection } from "./AdvancedSection";
 import { AboutSection } from "./AboutSection";
 import {
   DEFAULT_SETTINGS,
@@ -32,6 +33,7 @@ const SECTIONS = [
   { id: "keys", label: "Клавиши" },
   { id: "modules", label: "Модули" },
   { id: "discord", label: "Discord" },
+  { id: "advanced", label: "Расширенные" },
   { id: "about", label: "О Lumen" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -43,6 +45,7 @@ const SECTION_ICONS: Record<SectionId, ReactNode> = {
   discord: <path d="M8 7.5a14 14 0 0 1 8 0M7 17c3 1.4 7 1.4 10 0M5.5 7.5C3.8 10.6 3.3 13.5 3.8 16.6 5.3 17.8 6.8 18.5 8.3 19l1-2M18.5 7.5c1.7 3.1 2.2 6 1.7 9.1-1.5 1.2-3 1.9-4.5 2.4l-1-2M9.5 12.5h.01M14.5 12.5h.01" />,
   keys: <path d="M4 7h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zM7 10.5h.01M10.5 10.5h.01M14 10.5h.01M17 10.5h.01M8 14h8" />,
   look: <path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />,
+  advanced: <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />,
   about: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01" />,
 };
 
@@ -81,6 +84,12 @@ type Action = keyof Hotkeys;
 export function SettingsWindow() {
   const settings = useSettings();
   const [section, setSection] = useState<SectionId>("general");
+  // "Расширенные" stays out of the list until unlocked in О Lumen.
+  const unlocked = !!settings?.advanced.unlocked;
+  const sections = SECTIONS.filter((s) => s.id !== "advanced" || unlocked);
+  useEffect(() => {
+    if (section === "advanced" && !unlocked) setSection("about");
+  }, [section, unlocked]);
   useLook(settings?.look);
 
   useEffect(() => {
@@ -94,7 +103,7 @@ export function SettingsWindow() {
           <span className="orb" />
           Lumen
         </div>
-        {SECTIONS.map((s) => (
+        {sections.map((s) => (
           <button
             key={s.id}
             className="st-nav-item"
@@ -127,6 +136,8 @@ export function SettingsWindow() {
             <ModulesSection settings={settings} />
           ) : section === "discord" ? (
             <DiscordSection settings={settings} />
+          ) : section === "advanced" ? (
+            <AdvancedSection settings={settings} />
           ) : (
             <AboutSection settings={settings} />
           )}

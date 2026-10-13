@@ -1,11 +1,18 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { calculate, formatNumber, plainNumber } from "./calc";
 import { convert } from "./units";
+import {
+  searchHttpCodes,
+  getDropletAccent,
+  getCategoryName,
+  NetworkSearchResult,
+} from "./httpCodes";
 import { fuzzyScore } from "./fuzzy";
 import { App, launcher, useAppIcon, useApps } from "./useLauncher";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../island/env";
-import { formatShortcut, Hotkeys, openSettings, SearchEngine } from "../settings/useSettings";
+import { formatShortcut, Hotkeys, openSettings, SearchEngine, CodeBorderColor } from "../settings/useSettings";
 import { ENGINES } from "./engines";
 import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
 
@@ -16,6 +23,7 @@ interface Result {
   icon: ReactNode;
   title: ReactNode;
   hint: string;
+  data?: NetworkSearchResult;
   run: () => void;
 }
 
@@ -23,6 +31,12 @@ const icon = (d: ReactNode) => <svg viewBox="0 0 24 24">{d}</svg>;
 const ICONS = {
   calc: icon(<path d="M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 8h6M9 13h.01M12 13h.01M15 13h.01M9 16h.01M12 16h.01M15 16h.01" />),
   convert: icon(<path d="M7 7h11l-3-3M17 17H6l3 3" />),
+  http: icon(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a14 14 0 0 0 0 18M12 3a14 14 0 0 1 0 18M3.6 9h16.8M3.6 15h16.8" />
+    </>
+  ),
   web: icon(<path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />),
   shot: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />),
   scan: icon(<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h8M8 12h8M8 15h5" />),
@@ -52,6 +66,7 @@ function buildResults(
   hotkeys: Hotkeys,
   engine: SearchEngine,
   maxApps: number,
+  lookup: boolean,
 ): Result[] {
   const q = query.trim();
   const out: Result[] = [];
@@ -127,20 +142,89 @@ function buildResults(
     });
   }
 
-  apps
-    .map((app) => ({ app, score: fuzzyScore(app.name, q) }))
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxApps)
-    .forEach(({ app }) =>
-      out.push({
-        key: `app:${app.id}`,
-        icon: <AppIcon app={app} />,
-        title: app.name,
-        hint: "Приложение",
-        run: () => launcher.run(app.id),
-      }),
-    );
+  // Codes and protocols only when switched on (Расширенные), and only with a
+  // colon (h:404, http:dns) or as h404, so ordinary searches stay ordinary.
+  const isHelpQuery = lookup && (/^hhelp:?/i.test(q) || /^(?:h|http):help/i.test(q));
+  const isHttpQuery = lookup && (isHelpQuery || /^(?:h|http):/i.test(q) || /^h\d{3}$/i.test(q));
+  const httpResults = isHttpQuery ? searchHttpCodes(q) : [];
+  if (httpResults.length > 0) {
+    for (const item of httpResults) {
+      if (item.kind === "github-help") {
+        out.push({
+          key: `http:help:${item.url}`,
+          icon: ICONS.link,
+          data: item,
+          title: (
+            <span className="result-http-title">
+              <span className="http-tag http-tag-help">GitHub</span>
+              <span className="http-phrase">Protocol-list</span>
+              <span className="http-sep">·</span>
+              <span className="http-name-ru">{item.title}</span>
+            </span>
+          ),
+          hint: `${item.hint} · Enter — открыть инфо`,
+          run: () => launcher.openUrl(item.url),
+        });
+      } else if (item.kind === "protocol") {
+        out.push({
+          key: `prot:${item.id}`,
+          icon: ICONS.http,
+          data: item,
+          title: (
+            <span className="result-http-title">
+              <span className="http-tag http-tag-prot">Протокол</span>
+              <span className="http-phrase">{item.name}</span>
+              <span className="http-sep">·</span>
+              <span className="http-name-ru">{item.fullName}</span>
+            </span>
+          ),
+          hint: `${item.description} · Enter — открыть инфо`,
+          run: () => launcher.copy(`${item.name} (${item.fullName}): ${item.description}`),
+        });
+      } else {
+        out.push({
+          key: `http:${item.code}`,
+          icon: ICONS.http,
+          data: item,
+          title: (
+            <span className="result-http-title">
+              <span className={`http-tag http-tag-${item.category}`}>{item.code}</span>
+              <span className="http-phrase">{item.phrase}</span>
+              <span className="http-sep">·</span>
+              <span className="http-name-ru">{item.nameRu}</span>
+            </span>
+          ),
+          hint: `${item.description} · Enter — открыть инфо`,
+          run: () => launcher.copy(`HTTP ${item.code} ${item.phrase} (${item.nameRu}): ${item.description}`),
+        });
+      }
+    }
+  } else if (isHttpQuery && !/^https?:\/\//i.test(q)) {
+    out.push({
+      key: "http:not-found",
+      icon: ICONS.http,
+      title: "Код или протокол не найден",
+      hint: "Попробуй h:200, h:404, h:dns, h:tcp, h:wireguard или напиши hHelp:",
+      run: () => {},
+    });
+  }
+
+  if (!isHttpQuery) {
+    apps
+      .map((app) => ({ app, score: fuzzyScore(app.name, q) }))
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxApps)
+      .forEach(({ app }) =>
+        out.push({
+          key: `app:${app.id}`,
+          icon: <AppIcon app={app} />,
+          title: app.name,
+          hint: "Приложение",
+          run: () => launcher.run(app.id),
+        }),
+      );
+  }
 
   if (URL_LIKE.test(q)) {
     const url = /^https?:\/\//i.test(q) ? q : `https://${q}`;
@@ -168,22 +252,177 @@ function buildResults(
   return out;
 }
 
-export function LauncherPanel({ open, hotkeys, engine, maxApps }: {
+function DropletCard({
+  item,
+  onClose,
+  copied,
+  onCopy,
+  codeBorderColor = "code",
+  dropletGlassBlur = true,
+}: {
+  item: NetworkSearchResult;
+  onClose: () => void;
+  copied: boolean;
+  onCopy: () => void;
+  codeBorderColor?: CodeBorderColor;
+  dropletGlassBlur?: boolean;
+}) {
+  const codeAccent = getDropletAccent(item);
+  const borderAccent = codeBorderColor === "theme" ? "var(--glow-a)" : codeAccent;
+
+  return (
+    <motion.div
+      key="droplet-card"
+      className={`droplet-card${codeBorderColor === "theme" ? " theme-border" : ""}${!dropletGlassBlur ? " no-blur" : ""}`}
+      style={{
+        "--droplet-accent": codeAccent,
+        "--droplet-border": borderAccent,
+        transformOrigin: "0% 50%",
+      } as React.CSSProperties}
+      initial={{ opacity: 0, x: -24, scaleX: 0.74, scaleY: 0.9, filter: "blur(6px)" }}
+      animate={{ opacity: 1, x: 0, scaleX: 1, scaleY: 1, filter: "blur(0px)" }}
+      exit={{ opacity: 0, x: -18, scaleX: 0.78, scaleY: 0.92, filter: "blur(4px)" }}
+      transition={{ type: "spring", stiffness: 340, damping: 22, mass: 0.7 }}
+    >
+      <div className="droplet-header">
+        <div className="droplet-badge-group">
+          {item.kind === "http" ? (
+            <>
+              <span className={`droplet-badge http-tag-${item.category}`}>{item.code}</span>
+              <span className="droplet-phrase">{item.phrase}</span>
+            </>
+          ) : item.kind === "protocol" ? (
+            <>
+              <span className="droplet-badge http-tag-prot">Протокол</span>
+              <span className="droplet-phrase">{item.name}</span>
+            </>
+          ) : (
+            <>
+              <span className="droplet-badge http-tag-help">GitHub</span>
+              <span className="droplet-phrase">Protocol-list</span>
+            </>
+          )}
+        </div>
+        <button className="droplet-close" onClick={onClose} aria-label="Закрыть" title="Закрыть (Esc)">
+          <svg viewBox="0 0 24 24">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="droplet-sub">
+        {item.kind === "http" ? (
+          <>
+            <span className="droplet-category-label">{getCategoryName(item.category)}</span>
+            <span className="droplet-name-ru">{item.nameRu}</span>
+          </>
+        ) : item.kind === "protocol" ? (
+          <>
+            <span className="droplet-category-label">Сетевой протокол</span>
+            <span className="droplet-name-ru">{item.fullName}</span>
+          </>
+        ) : (
+          <>
+            <span className="droplet-category-label">Репозиторий</span>
+            <span className="droplet-name-ru">Справочник протоколов lackyhy</span>
+          </>
+        )}
+      </div>
+
+      <div className="droplet-desc">
+        {item.kind === "http"
+          ? item.description
+          : item.kind === "protocol"
+            ? item.description
+            : "Полный справочник сетевых протоколов и HTTP кодов на GitHub."}
+      </div>
+
+      <div className="droplet-actions">
+        <div className="droplet-btn-row">
+          <button className={`droplet-btn primary${copied ? " copied" : ""}`} onClick={onCopy}>
+            {copied ? (
+              <>
+                <svg viewBox="0 0 24 24">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Скопировано!
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24">
+                  <rect x="9" y="9" width="11" height="11" rx="2.5" />
+                  <path d="M5 15V6a2 2 0 0 1 2-2h8" />
+                </svg>
+                Скопировать
+              </>
+            )}
+          </button>
+          <button
+            className="droplet-btn"
+            onClick={() =>
+              launcher.openUrl(
+                item.kind === "http"
+                  ? "https://github.com/lackyhy/Protocol-list/blob/main/prot/HTTP.md"
+                  : item.kind === "protocol"
+                    ? item.docUrl
+                    : item.url,
+              )
+            }
+          >
+            <svg viewBox="0 0 24 24">
+              <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+            </svg>
+            GitHub
+          </button>
+        </div>
+        <div className="droplet-kbd-hint">
+          <kbd>Enter</kbd> скопировать · <kbd>Esc</kbd> закрыть
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+export function LauncherPanel({
+  open,
+  hotkeys,
+  engine,
+  maxApps = 5,
+  lookup = false,
+  detailItem,
+  onDetailChange,
+  codeBorderColor = "code",
+  dropletGlassBlur = true,
+}: {
   open: boolean;
   hotkeys: Hotkeys;
   engine: SearchEngine;
   /** How many programs a search lists at most. */
-  maxApps: number;
+  maxApps?: number;
+  /** HTTP codes and network protocols in search. */
+  lookup?: boolean;
+  detailItem?: NetworkSearchResult | null;
+  onDetailChange?: (item: NetworkSearchResult | null) => void;
+  codeBorderColor?: CodeBorderColor;
+  dropletGlassBlur?: boolean;
 }) {
   const { apps, ai } = useApps();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [internalDetail, setInternalDetail] = useState<NetworkSearchResult | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
 
+  const currentDetail = detailItem !== undefined ? detailItem : internalDetail;
+  const setDetail = (item: NetworkSearchResult | null) => {
+    setInternalDetail(item);
+    onDetailChange?.(item);
+  };
+
   const results = useMemo(
-    () => buildResults(query, apps, ai, hotkeys, engine, maxApps),
-    [query, apps, ai, hotkeys, engine, maxApps],
+    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup),
+    [query, apps, ai, hotkeys, engine, maxApps, lookup],
   );
 
   // Fresh, focused search box every time the launcher opens.
@@ -191,65 +430,129 @@ export function LauncherPanel({ open, hotkeys, engine, maxApps }: {
     if (open) {
       setQuery("");
       setSelected(0);
+      setDetail(null);
       requestAnimationFrame(() => input.current?.focus());
     }
   }, [open]);
 
-  useEffect(() => setSelected(0), [query]);
+  useEffect(() => {
+    setSelected(0);
+    setDetail(null);
+  }, [query]);
 
   useEffect(() => {
     list.current?.children[selected]?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
+  const handleCopyCurrent = () => {
+    if (!currentDetail) return;
+    if (currentDetail.kind === "http") {
+      launcher.copy(
+        `HTTP ${currentDetail.code} ${currentDetail.phrase} (${currentDetail.nameRu}): ${currentDetail.description}`,
+      );
+    } else if (currentDetail.kind === "protocol") {
+      launcher.copy(`${currentDetail.name} (${currentDetail.fullName}): ${currentDetail.description}`);
+    } else {
+      launcher.copy(currentDetail.url);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelected((i) => Math.min(i + 1, results.length - 1));
+      const nextIdx = Math.min(selected + 1, results.length - 1);
+      setSelected(nextIdx);
+      if (currentDetail) {
+        setDetail(results[nextIdx]?.data ?? null);
+      }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelected((i) => Math.max(i - 1, 0));
+      const prevIdx = Math.max(selected - 1, 0);
+      setSelected(prevIdx);
+      if (currentDetail) {
+        setDetail(results[prevIdx]?.data ?? null);
+      }
     } else if (e.key === "Enter") {
-      results[selected]?.run();
+      e.preventDefault();
+      const current = results[selected];
+      if (!current) return;
+      if (current.data) {
+        if (currentDetail && currentDetail === current.data) {
+          handleCopyCurrent();
+        } else {
+          setDetail(current.data);
+        }
+      } else {
+        current.run();
+      }
     } else if (e.key === "Escape") {
-      launcher.close(true);
+      if (currentDetail) {
+        e.preventDefault();
+        setDetail(null);
+      } else {
+        launcher.close(true);
+      }
     }
   };
 
   return (
-    <div className="panel launcher">
-      <label className="search-box">
-        <svg viewBox="0 0 24 24">
-          <path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />
-        </svg>
-        <input
-          ref={input}
-          value={query}
-          placeholder="Приложение, пример или вопрос"
-          spellCheck={false}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onKeyDown}
-          // Clicking the box opens the launcher so the window accepts typing.
-          onMouseDown={() => !open && launcher.open()}
-        />
-        <kbd>{formatShortcut(hotkeys.launcher)}</kbd>
-      </label>
+    <div className={`panel launcher${currentDetail ? " has-detail" : ""}`}>
+      <div className="launcher-main">
+        <label className="search-box">
+          <svg viewBox="0 0 24 24">
+            <path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" />
+          </svg>
+          <input
+            ref={input}
+            value={query}
+            placeholder="Приложение, пример или вопрос"
+            spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onKeyDown}
+            // Clicking the box opens the launcher so the window accepts typing.
+            onMouseDown={() => !open && launcher.open()}
+          />
+          <kbd>{formatShortcut(hotkeys.launcher)}</kbd>
+        </label>
 
-      <ul className="results" ref={list}>
-        {results.map((r, i) => (
-          <li
-            key={r.key}
-            className={`result${i === selected ? " selected" : ""}`}
-            onMouseMove={() => setSelected(i)}
-            onClick={r.run}
-          >
-            <span className="result-icon">{r.icon}</span>
-            <span className="result-main">
-              <span className="result-title">{r.title}</span>
-              <span className="result-hint">{r.hint}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
+        <ul className="results" ref={list}>
+          {results.map((r, i) => (
+            <li
+              key={r.key}
+              className={`result${i === selected ? " selected" : ""}`}
+              onMouseMove={() => setSelected(i)}
+              onClick={() => {
+                if (r.data) {
+                  setDetail(r.data);
+                } else {
+                  r.run();
+                }
+              }}
+            >
+              <span className="result-icon">{r.icon}</span>
+              <span className="result-main">
+                <span className="result-title">{r.title}</span>
+                <span className="result-hint">{r.hint}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <AnimatePresence>
+        {currentDetail && (
+          <DropletCard
+            item={currentDetail}
+            copied={copied}
+            onCopy={handleCopyCurrent}
+            onClose={() => setDetail(null)}
+            codeBorderColor={codeBorderColor}
+            dropletGlassBlur={dropletGlassBlur}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
