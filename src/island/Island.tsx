@@ -293,7 +293,8 @@ export function Island() {
 
   // With the drop on, where the pointer comes in picks the tab: from the
   // drop's side (the drop itself or the island's left end) the call, from
-  // anywhere else the tab last opened by hand.
+  // anywhere else the tab last opened by hand. A file dragged in keeps the
+  // shelf open instead.
   const chosenTab = useRef<TabId>(tab);
   const fromDrop = useRef(false);
   useEffect(() => {
@@ -302,7 +303,7 @@ export function Island() {
     // Only the moment the pointer arrives counts.
   }, [inside]);
   useEffect(() => {
-    if (hovered && dropCall) setTab(fromDrop.current ? "call" : chosenTab.current);
+    if (hovered && dropCall && !dropping) setTab(fromDrop.current ? "call" : chosenTab.current);
   }, [hovered]);
   const onlyOnDrop = onDrop && !cursor?.inside;
   const byClick = shape.openOn === "click";
