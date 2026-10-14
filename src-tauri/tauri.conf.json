@@ -59,10 +59,11 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFRkNCQTA4MERDODgzNzYKUldSMmc4Z05DTHI4WHA5ZWpjZHIrZThEKzFuVk5VNnlsTVdxbVNmRXFIaWptOU5tVHI5OVNiRUMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc2RUE1NDhBRDY0NTAwRDUKUldUVkFFWFdpbFRxZHJHZlZPVzV4NEJPSEkvVFMwbXB1R2RDSkhDV1Z4S01HNEVQSTcrTGszMHoK",
       "endpoints": [
-        "https://github.com/Mittikbb/lumen/releases/latest/download/latest.json"
+        "https://github.com/Mittikbb/lumen/releases/latest/download/latest-v2.json"
       ],
+      "requireSignedVersion": true,
       "windows": {
         "installMode": "passive"
       }
