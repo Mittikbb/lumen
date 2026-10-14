@@ -1371,6 +1371,176 @@ body,
   stroke-linejoin: round;
 }
 
+/* The keyboard drop below the island: RU / EN, CAPS / abc. */
+.keyboard-face {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--island-fg);
+  white-space: nowrap;
+}
+
+.keyboard-face svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.4;
+}
+
+.keyboard-drop.caps-on .keyboard-face {
+  color: var(--glow-a);
+}
+
+.keyboard-drop.caps-off .keyboard-face {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--island-fg-muted);
+}
+
+/* A Bluetooth device in the collapsed island. */
+.bluetooth {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.bluetooth-icon {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--glow-a);
+}
+
+.bluetooth-icon svg {
+  grid-area: 1 / 1;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The icon draws itself in. */
+.bluetooth:not(.still) .bluetooth-icon svg path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: bt-draw 0.7s ease-out forwards;
+}
+
+.bluetooth.gone .bluetooth-icon {
+  color: var(--island-fg-muted);
+}
+
+.bluetooth .bluetooth-cross {
+  color: #ff6b6e;
+}
+
+.bluetooth:not(.still) .bluetooth-icon .bluetooth-cross path {
+  animation-delay: 0.35s;
+}
+
+/* Rings spreading out from the icon as the device comes in. */
+.bluetooth-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--glow-a);
+  opacity: 0;
+  animation: bt-ripple 1.4s ease-out 0.15s 2;
+}
+
+.bluetooth-ripple.late {
+  animation-delay: 0.6s;
+}
+
+.bluetooth-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.bluetooth-meta {
+  flex: none;
+  margin-left: auto;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--island-fg-muted);
+}
+
+.battery {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.battery-body {
+  position: relative;
+  width: 22px;
+  height: 11px;
+  padding: 1.5px;
+  border: 1.5px solid currentColor;
+  border-radius: 3.5px;
+  box-sizing: border-box;
+}
+
+/* The battery's tip. */
+.battery-body::after {
+  content: "";
+  position: absolute;
+  top: 2.5px;
+  right: -4px;
+  width: 2px;
+  height: 3px;
+  border-radius: 0 1px 1px 0;
+  background: currentColor;
+}
+
+.battery-body i {
+  display: block;
+  height: 100%;
+  border-radius: 1.5px;
+  background: #3ba55d;
+}
+
+.battery.mid .battery-body i {
+  background: #f0b232;
+}
+
+.battery.low .battery-body i {
+  background: #ed4245;
+}
+
+@keyframes bt-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes bt-ripple {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
 /* Shelf */
 .panel.shelf {
   position: relative;
@@ -2114,6 +2284,7 @@ html.capture-root #root {
 /* A drop beside the island ("Капля", the timer); a pill while it says more. */
 .drop-body {
   position: absolute;
+  top: 0;
   left: 0;
   display: flex;
   align-items: center;

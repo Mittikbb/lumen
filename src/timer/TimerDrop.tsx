@@ -30,11 +30,10 @@ export function timerWidth(size: number, t: Timer | null, left: number) {
  * empties as time runs out and the time left. Click pauses or resumes it,
  * double click cancels it; when it's up it rings and pulses until clicked.
  */
-export function TimerDrop({ timer: t, left, motion: m, top, lean, layer, live, hitRef }: {
+export function TimerDrop({ timer: t, left, motion: m, lean, layer, live, hitRef }: {
   timer: Timer;
   left: number;
   motion: DropMotion;
-  top: number;
   lean: Lean;
   layer: DropLayer;
   live?: boolean;
@@ -49,7 +48,6 @@ export function TimerDrop({ timer: t, left, motion: m, top, lean, layer, live, h
   return (
     <Drop
       motion={m}
-      top={top}
       lean={lean}
       layer={layer}
       className={`timer-drop${done ? " done" : ""}${paused ? " paused" : ""}`}

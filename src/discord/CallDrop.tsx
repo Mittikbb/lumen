@@ -40,12 +40,11 @@ const MARKS: Record<CallEventKind, { mark: ReactNode; tone: string; text: string
  * what just happened. Popped out, a click turns your mic on or off and a
  * double click your sound.
  */
-export function CallDrop({ voice, event, motion: m, top, lean, layer, tint, live, hitRef, onPoke }: {
+export function CallDrop({ voice, event, motion: m, lean, layer, tint, live, hitRef, onPoke }: {
   voice: Voice;
   /** What the drop is announcing, if anything. */
   event: CallEvent | null;
   motion: DropMotion;
-  top: number;
   lean: Lean;
   layer: DropLayer;
   /** "discord" tints the drop's glow Discord blurple. */
@@ -64,7 +63,6 @@ export function CallDrop({ voice, event, motion: m, top, lean, layer, tint, live
   return (
     <Drop
       motion={m}
-      top={top}
       lean={lean}
       layer={layer}
       className={`call-drop${tint === "discord" ? " discord" : ""}${speaker && !event ? " speaking" : ""}`}

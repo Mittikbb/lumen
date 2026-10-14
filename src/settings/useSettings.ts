@@ -99,6 +99,12 @@ export interface NoticePrefs {
   copy: boolean;
   shelf: boolean;
   rain: boolean;
+  /** A Bluetooth device connected or disconnected. */
+  bluetooth: boolean;
+  /** The keyboard layout switched (a drop below the island). */
+  layout: boolean;
+  /** Caps Lock switched (the same drop). */
+  caps: boolean;
   /** Multiplier for how long notices stay (0.5..2). */
   duration: number;
 }
@@ -264,7 +270,7 @@ export const DEFAULT_SETTINGS: Settings = {
     reach: 120,
     tint: "island",
   },
-  notices: { copy: true, shelf: true, rain: true, duration: 1 },
+  notices: { copy: true, shelf: true, rain: true, bluetooth: true, layout: true, caps: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
   display: { monitor: null, hideFullscreen: true, hideMaximized: false, position: null },
   clipboard: { limit: 60, keepDays: 0, ignore: [] },

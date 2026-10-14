@@ -34,6 +34,9 @@ import { TimerDrop, timerWidth } from "../timer/TimerDrop";
 import { useCallEvents } from "../discord/useCallEvents";
 import { useDownloads } from "../downloads/useDownloads";
 import { DownloadView } from "../downloads/DownloadView";
+import { useBluetoothEvents, useKeyboardEvents } from "../devices/useDeviceEvents";
+import { KeyboardDrop, keyboardWidth } from "../devices/KeyboardDrop";
+import { BluetoothView } from "../devices/BluetoothView";
 import type { MotionPrefs } from "../settings/useSettings";
 
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
@@ -151,6 +154,8 @@ export function Island() {
   // Downloads from the Downloads folder, when switched on in the settings.
   const downloads = useDownloads();
   const downloading = prefs.downloads.enabled && (downloads.active.length > 0 || !!downloads.done);
+  // Bluetooth devices coming and going, shown in the collapsed island.
+  const bluetooth = useBluetoothEvents(() => notices.bluetooth);
   // The music shortcuts: an arrow on the side the track moves to.
   const skip = useMediaKeys();
   const [notice, setNotice] = useState<{
@@ -191,7 +196,7 @@ export function Island() {
 
   // Collapsed size: wider for a notice or a call shown inside the island.
   const collapsedSize = {
-    width: notice || downloading ? Math.max(NOTICE_WIDTH, shape.width + 70) : miniCall ? Math.max(shape.width, 250) : shape.width,
+    width: notice || bluetooth || downloading ? Math.max(NOTICE_WIDTH, shape.width + 70) : miniCall ? Math.max(shape.width, 250) : shape.width,
     height: shape.height,
   };
 
@@ -215,6 +220,7 @@ export function Island() {
     dropState,
     drop.edge,
     "left",
+    drop.cross,
     shape.height,
     notifyWidth(shape.height, callEvent),
     prefs.call.pull,
@@ -227,12 +233,14 @@ export function Island() {
   const { timer: liveTimer, left: timerLeft } = useTimer();
   useEffect(() => setTimerSound(prefs.timer.sound, prefs.timer.volume), [prefs.timer.sound, prefs.timer.volume]);
   const shownTimer = useLingering(liveTimer, 600);
-  const timerEdge = dropGeometry(center, top, collapsedSize.width, shape.height, "right").edge;
+  const timerAt = dropGeometry(center, top, collapsedSize.width, shape.height, "right");
+  const timerEdge = timerAt.edge;
   const timerState: DropState = expanded ? "merged" : liveTimer && !drag.dragging ? "notify" : "rest";
   const timerMotion = useDropMotion(
     timerState,
     timerEdge,
     "right",
+    timerAt.cross,
     shape.height,
     timerWidth(shape.height, shownTimer, timerLeft),
     prefs.call.pull,
@@ -240,7 +248,24 @@ export function Island() {
   );
   const timerLive = !!liveTimer && timerState === "notify";
 
-  const liquid = (prefs.call.style === "drop" || !!shownTimer) && !moves.reduced;
+  // The keyboard layout or Caps Lock: a small drop out of the bottom edge.
+  const keyEvent = useKeyboardEvents((e) => (e.kind === "layout" ? notices.layout : notices.caps));
+  const shownKey = useLingering(keyEvent, 600);
+  const keySize = Math.round(shape.height * 0.9);
+  const keyAt = dropGeometry(center, top, collapsedSize.width, keySize, "bottom", collapsedSize.height);
+  const keyState: DropState = expanded ? "merged" : keyEvent && !drag.dragging ? "notify" : "rest";
+  const keyMotion = useDropMotion(
+    keyState,
+    keyAt.edge,
+    "bottom",
+    keyAt.cross,
+    keySize,
+    keyboardWidth(keySize, shownKey),
+    prefs.call.pull,
+    moves.reduced,
+  );
+
+  const liquid = (prefs.call.style === "drop" || !!shownTimer || !!shownKey) && !moves.reduced;
   // The island's content, nudged aside by drops squeezing out of either end.
   const pushes = useRef({ call: false, timer: false });
   pushes.current = { call: liquid && !!dropCall, timer: liquid && !!shownTimer };
@@ -452,18 +477,21 @@ export function Island() {
         <>
           <motion.div ref={haloRef} className={`island island-halo${glow}`} {...twin(0)} />
           <AnimatePresence>
-            {dropCall && <CallDrop key="drop" layer="halo" event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
-            {shownTimer && <TimerDrop key="timer" layer="halo" timer={shownTimer} left={timerLeft} motion={timerMotion} top={top} lean={{ x, y }} />}
+            {dropCall && <CallDrop key="drop" layer="halo" event={callEvent} tint={prefs.call.tint} motion={dropMotion} lean={{ x, y }} voice={dropCall} />}
+            {shownKey && <KeyboardDrop key="keyboard" layer="halo" event={shownKey} motion={keyMotion} lean={{ x, y }} />}
+            {shownTimer && <TimerDrop key="timer" layer="halo" timer={shownTimer} left={timerLeft} motion={timerMotion} lean={{ x, y }} />}
           </AnimatePresence>
           <div className="liquid">
             <LiquidFilter />
             {/* 1 px smaller: the filter grows shapes a little, which would cover the glow's ring. */}
             <motion.div className="island-ghost" {...twin(1)} />
             <AnimatePresence>
-              {dropCall && <DropNeck key="neck" motion={dropMotion} top={top} edge={drop.edge} lean={{ x, y }} />}
-              {dropCall && <CallDrop key="drop" layer="fill" event={callEvent} tint={prefs.call.tint} motion={dropMotion} top={top} lean={{ x, y }} voice={dropCall} />}
-              {shownTimer && <DropNeck key="timer-neck" motion={timerMotion} top={top} edge={timerEdge} lean={{ x, y }} />}
-              {shownTimer && <TimerDrop key="timer" layer="fill" timer={shownTimer} left={timerLeft} motion={timerMotion} top={top} lean={{ x, y }} />}
+              {dropCall && <DropNeck key="neck" motion={dropMotion} edge={drop.edge} lean={{ x, y }} />}
+              {dropCall && <CallDrop key="drop" layer="fill" event={callEvent} tint={prefs.call.tint} motion={dropMotion} lean={{ x, y }} voice={dropCall} />}
+              {shownKey && <DropNeck key="keyboard-neck" motion={keyMotion} edge={keyAt.edge} lean={{ x, y }} />}
+              {shownKey && <KeyboardDrop key="keyboard" layer="fill" event={shownKey} motion={keyMotion} lean={{ x, y }} />}
+              {shownTimer && <DropNeck key="timer-neck" motion={timerMotion} edge={timerEdge} lean={{ x, y }} />}
+              {shownTimer && <TimerDrop key="timer" layer="fill" timer={shownTimer} left={timerLeft} motion={timerMotion} lean={{ x, y }} />}
             </AnimatePresence>
           </div>
         </>
@@ -476,13 +504,15 @@ export function Island() {
             event={callEvent}
             tint={prefs.call.tint}
             motion={dropMotion}
-            top={top}
             lean={{ x, y }}
             voice={dropCall}
             live={dropLive}
             hitRef={dropRef}
             onPoke={poke}
           />
+        )}
+        {shownKey && (
+          <KeyboardDrop key="keyboard" layer={liquid ? "face" : "solid"} event={shownKey} motion={keyMotion} lean={{ x, y }} />
         )}
         {shownTimer && (
           <TimerDrop
@@ -491,7 +521,6 @@ export function Island() {
             timer={shownTimer}
             left={timerLeft}
             motion={timerMotion}
-            top={top}
             lean={{ x, y }}
             live={timerLive}
             hitRef={timerRef}
@@ -621,6 +650,8 @@ export function Island() {
                   <span className="notice-title">{notice.title}</span>
                   <span className="notice-detail">{notice.detail}</span>
                 </motion.div>
+              ) : bluetooth ? (
+                <BluetoothView event={bluetooth} reduced={moves.reduced} />
               ) : downloading ? (
                 <DownloadView active={downloads.active} done={downloads.done} reduced={moves.reduced} />
               ) : miniCall && voice ? (

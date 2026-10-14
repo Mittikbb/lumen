@@ -1,10 +1,12 @@
 mod audio;
+mod bluetooth;
 mod browser;
 mod capture;
 mod clipboard;
 mod discord;
 mod downloads;
 mod hotkeys;
+mod keyboard;
 mod launcher;
 mod media;
 mod net;
@@ -121,6 +123,8 @@ pub fn run() {
             discord::init(app.handle());
             updates::spawn_checker(app.handle().clone());
             downloads::spawn_watcher(app.handle().clone());
+            keyboard::spawn_watcher(app.handle().clone());
+            bluetooth::spawn_watcher(app.handle().clone());
 
             Ok(())
         })

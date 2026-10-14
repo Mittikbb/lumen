@@ -159,6 +159,15 @@ export function IslandSection({ settings }: { settings: Settings }) {
         <Row title="Скоро дождь">
           <Toggle on={notices.rain} onChange={(rain) => notice({ rain })} />
         </Row>
+        <Row title="Bluetooth-устройства" hint="Наушники, клавиатура, мышь: подключение и заряд">
+          <Toggle on={notices.bluetooth} onChange={(bluetooth) => notice({ bluetooth })} />
+        </Row>
+        <Row title="Раскладка клавиатуры" hint="Капля под островом: RU, EN…">
+          <Toggle on={notices.layout} onChange={(layout) => notice({ layout })} />
+        </Row>
+        <Row title="Caps Lock" hint="Та же капля: CAPS или abc">
+          <Toggle on={notices.caps} onChange={(caps) => notice({ caps })} />
+        </Row>
         <Row title="Длительность">
           <Slider value={notices.duration} min={0.5} max={2} step={0.25} format={times} onChange={(duration) => notice({ duration })} />
         </Row>

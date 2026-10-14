@@ -23,21 +23,26 @@ const DOUBLE_MS = 260;
 
 /** `notify`: popped out and widened into a pill. */
 export type DropState = "rest" | "out" | "notify" | "merged";
-/** Which end of the island the drop flows out of. */
-export type DropSide = "left" | "right";
+/** Which end of the island the drop flows out of; "bottom" hangs below it. */
+export type DropSide = "left" | "right" | "bottom";
 
-/** -1 to the left of the island, +1 to the right. */
+/** -1 to the left of the island, +1 to the right (and down). */
 const sign = (side: DropSide) => (side === "left" ? -1 : 1);
 
 /**
- * The drop's geometry for an island of `width` centred at `center`, top at
- * `top`: the island's end it flows out of, and the centre of the popped-out
- * drop.
+ * The drop's geometry for an island of `width` × `height` centred at
+ * `center`, top at `top`: the island's edge it flows out of, the drop's
+ * position across that axis (its top for a side drop, its centre for one
+ * below), and the centre of the popped-out drop.
  */
-export function dropGeometry(center: number, top: number, width: number, size: number, side: DropSide) {
+export function dropGeometry(center: number, top: number, width: number, size: number, side: DropSide, height = size) {
+  if (side === "bottom") {
+    const edge = top + height;
+    return { edge, cross: center, cx: center, cy: edge + GAP + size / 2 };
+  }
   const dir = sign(side);
   const edge = center + (dir * width) / 2;
-  return { edge, cx: edge + dir * (GAP + size / 2), cy: top + size / 2 };
+  return { edge, cross: top, cx: edge + dir * (GAP + size / 2), cy: top + size / 2 };
 }
 
 /**
@@ -83,7 +88,8 @@ export function textWidth(text: string, font: string, max = Infinity) {
 
 /**
  * A drop's motion, shared by all of its layers. At rest it hides inside the
- * island's end (`edge`). Popping out, it squeezes through that edge (nudging
+ * island's end (`edge`); `cross` places it along that edge (see
+ * dropGeometry). Popping out, it squeezes through that edge (nudging
  * the island's content aside), drags a neck that thins as it stretches, tears
  * off (see PULLS) and springs back to its spot; coming back the neck reforms
  * and it melts in. As a pill it then widens away from the island. It's
@@ -94,6 +100,7 @@ export function useDropMotion(
   state: DropState,
   edge: number,
   side: DropSide,
+  cross: number,
   size: number,
   width: number,
   pull: DropPull,
@@ -101,7 +108,12 @@ export function useDropMotion(
 ) {
   const { breakAt, seconds } = PULLS[pull] ?? PULLS.normal;
   const dir = sign(side);
-  const restInner = edge - dir * size * 1.15;
+  const vertical = side === "bottom";
+  // At rest it hides inside the island's end. The island is barely taller
+  // than a drop below it, so that one tucks in only partway, or it would
+  // show above the island's top.
+  const restInner = vertical ? edge - size * 0.8 : edge - dir * size * 1.15;
+  const mergedInner = vertical ? restInner : edge - dir * size * 1.5;
   const outInner = edge + dir * GAP;
   const inner = useMotionValue(restInner);
   const w = useMotionValue(size);
@@ -159,20 +171,27 @@ export function useDropMotion(
           animate(opacity, 1, instant),
         ]
       : [
-          animate(inner, state === "merged" ? edge - dir * size * 1.5 : restInner, reduced ? instant : settle),
+          animate(inner, state === "merged" ? mergedInner : restInner, reduced ? instant : settle),
           animate(w, size, reduced ? instant : settle),
           animate(scale, state === "merged" ? 0.4 : 0.8, reduced ? instant : settle),
           animate(opacity, state === "merged" ? 0 : 1, reduced ? instant : { duration: 0.25 }),
         ];
     return () => running.forEach((a) => a.stop());
-  }, [state, edge, dir, size, width, breakAt, seconds, reduced, inner, w, scale, opacity, outInner, restInner]);
+  }, [state, edge, dir, size, width, breakAt, seconds, reduced, inner, w, scale, opacity, outInner, restInner, mergedInner]);
 
-  // The element's left edge: a left drop grows leftwards from its inner edge.
-  const x = useTransform(() => (dir < 0 ? inner.get() - w.get() : inner.get()));
-  // The island's content nudged aside while the drop squeezes out, gliding back after.
-  const push = useSpring(useTransform(neck, [0, size * NECK], [0, -dir * PUSH]), { stiffness: 400, damping: 30 });
+  // The element's corner: a side drop moves along x (a left one grows
+  // leftwards from its inner edge), one below moves down and grows both ways.
+  const x = useTransform(() =>
+    vertical ? cross - w.get() / 2 : dir < 0 ? inner.get() - w.get() : inner.get(),
+  );
+  const y = useTransform(() => (vertical ? inner.get() : cross));
+  // The island's content nudged aside while a side drop squeezes out, gliding back after.
+  const push = useSpring(useTransform(neck, [0, size * NECK], [0, vertical ? 0 : -dir * PUSH]), {
+    stiffness: 400,
+    damping: 30,
+  });
 
-  return { x, inner, w, scale, opacity, face, label, neck, push, size, dir };
+  return { x, y, inner, w, scale, opacity, face, label, neck, push, size, dir, vertical, cross };
 }
 
 export type DropMotion = ReturnType<typeof useDropMotion>;
@@ -212,9 +231,8 @@ export function useDropClicks(onClick: () => void, onDoubleClick: () => void, on
  * The face takes clicks while `live` (popped out); `hitRef` gets it, for the
  * window's hit region.
  */
-export function Drop({ motion: m, top, lean, layer, className, live, hitRef, clicks, title, children }: {
+export function Drop({ motion: m, lean, layer, className, live, hitRef, clicks, title, children }: {
   motion: DropMotion;
-  top: number;
   /** The island's lean toward the pointer; the drop sways along, keeping its gap. */
   lean: Lean;
   layer: DropLayer;
@@ -236,11 +254,12 @@ export function Drop({ motion: m, top, lean, layer, className, live, hitRef, cli
         title={takesClicks ? title : undefined}
         className={`drop-body ${layer}${className ? ` ${className}` : ""}${takesClicks ? " live" : ""}`}
         style={{
-          top,
           width: m.w,
           height: m.size,
-          originX: m.dir < 0 ? 1 : 0,
+          originX: m.vertical ? 0.5 : m.dir < 0 ? 1 : 0,
+          originY: m.vertical ? 0 : 0.5,
           x: m.x,
+          y: m.y,
           scale: m.scale,
           opacity: layer === "face" ? m.face : m.opacity,
         }}
@@ -253,32 +272,36 @@ export function Drop({ motion: m, top, lean, layer, className, live, hitRef, cli
 }
 
 /** The neck between a drop and the island, in the liquid layer. */
-export function DropNeck({ motion: m, top, edge, lean }: {
+export function DropNeck({ motion: m, edge, lean }: {
   motion: DropMotion;
-  top: number;
   edge: number;
   lean: Lean;
 }) {
-  const at = useRef({ top, edge });
-  at.current = { top, edge };
+  const at = useRef({ edge });
+  at.current = { edge };
   // From the middle of the drop into the island's rounded end.
   const ends = (v: number) => {
     const inDrop = v + (m.dir * m.size) / 2;
     const inIsland = at.current.edge - m.dir * m.size * 0.3;
     return { inDrop, inIsland };
   };
-  const left = useTransform(m.inner, (v) => {
+  // Along the drop's axis: from where the neck starts to how long it is.
+  const start = useTransform(m.inner, (v) => {
     const { inDrop, inIsland } = ends(v);
     return Math.min(inDrop, inIsland);
   });
-  const width = useTransform(m.inner, (v) => {
+  const length = useTransform(m.inner, (v) => {
     const { inDrop, inIsland } = ends(v);
     return Math.max(0, m.dir * (inDrop - inIsland));
   });
-  const y = useTransform(m.neck, (n) => at.current.top + (m.size - n) / 2);
+  // Across it: centred on the drop, as thick as the neck is now.
+  const across = useTransform(m.neck, (n) => (m.vertical ? m.cross - n / 2 : m.cross + (m.size - n) / 2));
+  const style = m.vertical
+    ? { left: across, top: start, width: m.neck, height: length }
+    : { left: start, top: across, width: length, height: m.neck };
   return (
     <motion.div className="drop-lean" style={{ x: lean.x, y: lean.y }} exit={{ opacity: 0 }}>
-      <motion.div className="drop-neck" style={{ left, top: y, width, height: m.neck }} />
+      <motion.div className="drop-neck" style={style} />
     </motion.div>
   );
 }
