@@ -13,6 +13,7 @@ mod net;
 mod overlay;
 mod pixels;
 mod registry;
+mod secret;
 mod settings;
 mod shelf;
 mod shell_image;

@@ -9,7 +9,12 @@
 //! window it's created hidden and non-activating and only made focusable once
 //! shown, so shell mods that restyle new windows leave it alone.
 
-use std::{collections::BTreeMap, fs, path::PathBuf, sync::Mutex};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -18,7 +23,7 @@ use tauri::{
     WindowEvent, window::Color,
 };
 
-use crate::{discord, hotkeys, overlay, tray};
+use crate::{discord, hotkeys, overlay, secret, tray};
 
 const WINDOW: &str = "settings";
 
@@ -278,13 +283,30 @@ pub fn init(app: &AppHandle) {
     };
     let _ = fs::create_dir_all(&dir);
     let path = dir.join("settings.json");
-    if let Some(saved) = fs::read_to_string(&path)
+    if let Some(mut saved) = fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
     {
+        let stored = std::mem::take(&mut saved.discord.client_secret);
+        // One that can't be opened (profile from another PC) has to be entered again.
+        saved.discord.client_secret = secret::open(&stored).unwrap_or_default();
+        // A secret saved before secrets were sealed gets sealed now.
+        if !stored.is_empty() && stored == saved.discord.client_secret {
+            save(&path, &saved);
+        }
         *store.settings.lock().unwrap() = saved;
     }
     *store.file.lock().unwrap() = Some(path);
+}
+
+/// Writes settings.json with the Discord app secret sealed.
+fn save(path: &Path, settings: &Settings) {
+    let mut on_disk = settings.clone();
+    // Never in the clear: if sealing fails, the secret isn't kept at all.
+    on_disk.discord.client_secret = secret::seal(&settings.discord.client_secret).unwrap_or_default();
+    if let Ok(json) = serde_json::to_string_pretty(&on_disk) {
+        let _ = fs::write(path, json);
+    }
 }
 
 pub fn get(app: &AppHandle) -> Settings {
@@ -313,9 +335,7 @@ pub fn settings_update(app: AppHandle, patch: Value) -> Result<Settings, String>
     };
 
     if let Some(path) = store.file.lock().unwrap().as_ref() {
-        if let Ok(json) = serde_json::to_string_pretty(&next) {
-            let _ = fs::write(path, json);
-        }
+        save(path, &next);
     }
     if next.hotkeys != prev.hotkeys {
         hotkeys::apply(&app, &next.hotkeys)?;

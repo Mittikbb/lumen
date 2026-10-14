@@ -28,7 +28,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use windows::Win32::{Foundation::HANDLE, System::Pipes::PeekNamedPipe};
 
 use crate::{
-    media, net,
+    media, net, secret,
     settings::{self, DiscordPrefs},
 };
 
@@ -745,15 +745,18 @@ fn token_path(app: &AppHandle) -> Option<PathBuf> {
         .map(|d| d.join("discord-token.json"))
 }
 
-/// The saved token, if it belongs to the configured application.
+/// The saved token, if it belongs to the configured application. One saved
+/// before tokens were sealed is read as is and sealed on the next save.
 fn load_token(app: &AppHandle, prefs: &DiscordPrefs) -> Option<Token> {
-    let token: Token = serde_json::from_str(&fs::read_to_string(token_path(app)?).ok()?).ok()?;
+    let stored = fs::read_to_string(token_path(app)?).ok()?;
+    let token: Token = serde_json::from_str(&secret::open(stored.trim())?).ok()?;
     (token.client_id == prefs.client_id.trim()).then_some(token)
 }
 
 fn save_token(app: &AppHandle, token: &Token) {
-    if let (Some(path), Ok(json)) = (token_path(app), serde_json::to_string(token)) {
-        let _ = fs::write(path, json);
+    let sealed = serde_json::to_string(token).ok().and_then(|json| secret::seal(&json));
+    if let (Some(path), Some(sealed)) = (token_path(app), sealed) {
+        let _ = fs::write(path, sealed);
     }
 }
 
