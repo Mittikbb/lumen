@@ -103,6 +103,9 @@ fn known_ai_apps(apps: &[App]) -> Vec<App> {
 /// Icon for an app, from cache or extracted on a worker thread.
 #[tauri::command]
 pub async fn launcher_icon(app: AppHandle, id: String) -> Option<String> {
+    if !known_app(&app, &id) {
+        return None;
+    }
     if let Some(cached) = app.state::<Launcher>().icons.lock().unwrap().get(&id) {
         return cached.clone();
     }
@@ -119,8 +122,13 @@ pub async fn launcher_icon(app: AppHandle, id: String) -> Option<String> {
     icon
 }
 
+/// Starts a Start menu app. Only ids from the app list are taken: the shell
+/// would start any program path handed to it the same way.
 #[tauri::command]
 pub fn launcher_run(app: AppHandle, id: String) -> Result<(), String> {
+    if !known_app(&app, &id) {
+        return Err("not a Start menu app".into());
+    }
     close(&app, false);
     Command::new("explorer.exe")
         .arg(format!("shell:AppsFolder\\{id}"))
@@ -148,10 +156,18 @@ pub fn launcher_copy(app: AppHandle, text: String) -> Result<(), String> {
 /// Copies the question and opens the AI app, so it can be pasted with Ctrl+V.
 #[tauri::command]
 pub fn launcher_ask_ai(app: AppHandle, id: String, question: String) -> Result<(), String> {
+    if !known_app(&app, &id) {
+        return Err("not a Start menu app".into());
+    }
     if !question.trim().is_empty() {
         clipboard::write_text(&question)?;
     }
     launcher_run(app, id)
+}
+
+/// Whether `id` is in the Start menu app list the launcher shows.
+fn known_app(app: &AppHandle, id: &str) -> bool {
+    app.state::<Launcher>().apps.lock().unwrap().iter().any(|a| a.id == id)
 }
 
 fn open_launcher(app: &AppHandle) -> tauri::Result<()> {

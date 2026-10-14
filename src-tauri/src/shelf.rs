@@ -3,7 +3,7 @@
 //! restarts.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -11,7 +11,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, DragDropEvent, Emitter, Manager, Runtime, State, Window, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::{pixels, settings, shell_image};
@@ -41,6 +41,9 @@ pub struct Shelf {
     file: Mutex<Option<PathBuf>>,
     /// Thumbnails as data URLs by path.
     thumbs: Mutex<HashMap<String, Option<String>>>,
+    /// Files from the last drop on the island, the only ones the shelf takes:
+    /// the page can't shelve a path of its choosing and then open it.
+    dropped: Mutex<HashSet<String>>,
 }
 
 impl Shelf {
@@ -60,6 +63,10 @@ impl Shelf {
             }
         }
         let _ = app.emit("lumen://shelf", items);
+    }
+
+    fn holds(&self, path: &str) -> bool {
+        self.items.lock().unwrap().iter().any(|i| i.path == path)
     }
 
     fn path_of(&self, id: u64) -> Option<String> {
@@ -83,6 +90,22 @@ pub fn init(app: &AppHandle) {
     }
 }
 
+/// Remembers what the user dropped on the island. Runs before the page hears
+/// of the drop and asks to shelve it. The island is a webview window, so the
+/// drop comes as a window event, not a webview one.
+pub fn on_drop<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
+    let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event else {
+        return;
+    };
+    if window.label() != "main" {
+        return;
+    }
+    let shelf = window.state::<Shelf>();
+    let mut dropped = shelf.dropped.lock().unwrap();
+    dropped.clear();
+    dropped.extend(paths.iter().map(|p| p.to_string_lossy().into_owned()));
+}
+
 #[tauri::command]
 pub fn shelf_list(shelf: State<Shelf>) -> Vec<Item> {
     shelf.snapshot()
@@ -91,13 +114,14 @@ pub fn shelf_list(shelf: State<Shelf>) -> Vec<Item> {
 /// Adds dropped files to the front of the shelf. Returns the names added.
 #[tauri::command]
 pub fn shelf_add(paths: Vec<String>, app: AppHandle, shelf: State<Shelf>) -> Vec<String> {
+    let dropped = std::mem::take(&mut *shelf.dropped.lock().unwrap());
     let mut added = Vec::new();
     {
         let mut items = shelf.items.lock().unwrap();
         let mut id = now_ms();
         for path in paths {
             let p = Path::new(&path);
-            if !p.exists() {
+            if !dropped.contains(&path) || !p.exists() {
                 continue;
             }
             items.retain(|i| i.path != path);
@@ -156,6 +180,9 @@ pub fn shelf_reveal(id: u64, app: AppHandle, shelf: State<Shelf>) -> Result<(), 
 /// Preview for a shelf tile, cached; extracted on a worker thread.
 #[tauri::command]
 pub async fn shelf_thumb(path: String, app: AppHandle) -> Option<String> {
+    if !app.state::<Shelf>().holds(&path) {
+        return None;
+    }
     if let Some(cached) = app.state::<Shelf>().thumbs.lock().unwrap().get(&path) {
         return cached.clone();
     }
