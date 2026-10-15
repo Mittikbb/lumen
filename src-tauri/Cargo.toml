@@ -1,6 +1,6 @@
 [package]
 name = "lumen"
-version = "0.5.7"
+version = "0.5.8"
 description = "A living island at the top of your Windows desktop"
 authors = ["Mittikbb"]
 edition = "2024"
