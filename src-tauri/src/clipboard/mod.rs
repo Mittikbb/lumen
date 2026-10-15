@@ -7,7 +7,7 @@ pub(crate) mod win;
 
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Mutex,
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -18,10 +18,13 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use windows::Win32::System::DataExchange::GetClipboardSequenceNumber;
 
 use crate::{
-    pixels,
+    pixels, secret,
     settings::{self, ClipboardPrefs},
 };
 use win::Content;
+
+/// How a PNG file starts; sealed images don't.
+const PNG_SIGNATURE: &[u8] = b"\x89PNG";
 
 const MAX_IMAGES: usize = 20;
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
@@ -75,12 +78,35 @@ impl History {
     /// Persists and broadcasts the current list.
     fn changed(&self, app: &AppHandle) {
         let entries = self.snapshot();
-        if let Some(dir) = self.dir.lock().unwrap().as_ref() {
-            if let Ok(json) = serde_json::to_string(&entries) {
-                let _ = fs::write(dir.join("clipboard.json"), json);
+        self.save(&entries);
+        let _ = app.emit("lumen://clipboard", entries);
+    }
+
+    /// Writes clipboard.json sealed; never in the clear, so nothing is
+    /// written if sealing fails.
+    fn save(&self, entries: &[Entry]) {
+        let Some(dir) = self.dir.lock().unwrap().clone() else {
+            return;
+        };
+        let sealed = serde_json::to_string(entries).ok().and_then(|json| secret::seal(&json));
+        if let Some(sealed) = sealed {
+            let _ = fs::write(dir.join("clipboard.json"), sealed);
+        }
+    }
+
+    /// Seals a history and images that earlier versions kept in the clear.
+    fn seal_old_files(&self) {
+        let entries = self.snapshot();
+        if let Some(images) = self.images_dir() {
+            for img in entries.iter().filter_map(|e| e.image.as_ref()) {
+                let path = images.join(&img.file);
+                let Ok(bytes) = fs::read(&path) else { continue };
+                if let Some(sealed) = bytes.starts_with(PNG_SIGNATURE).then(|| secret::seal_bytes(&bytes)).flatten() {
+                    let _ = fs::write(&path, sealed);
+                }
             }
         }
-        let _ = app.emit("lumen://clipboard", entries);
+        self.save(&entries);
     }
 
     /// Removes entries matching `drop`, deleting their image files.
@@ -152,7 +178,7 @@ impl History {
         let dir = self.images_dir()?;
         fs::create_dir_all(&dir).ok()?;
         let file = format!("{at}.png");
-        fs::write(dir.join(&file), pixels::encode_png(rgba)?).ok()?;
+        fs::write(dir.join(&file), secret::seal_bytes(&pixels::encode_png(rgba)?)?).ok()?;
         Some(ClipImage {
             width: rgba.width(),
             height: rgba.height(),
@@ -210,7 +236,7 @@ pub fn clipboard_paste(id: u64, history: State<History>) -> Result<(), String> {
     match &entry.image {
         Some(img) => {
             let path = history.images_dir().ok_or("no data dir")?.join(&img.file);
-            let png = fs::read(path).map_err(|e| e.to_string())?;
+            let png = read_image(&path).ok_or("broken image")?;
             let rgba = pixels::decode_png(&png).ok_or("broken image")?;
             win::write_image(&rgba, &png)?;
         }
@@ -250,13 +276,15 @@ pub fn spawn_watcher(app: AppHandle) {
     let history = app.state::<History>();
     if let Ok(dir) = app.path().app_data_dir() {
         let _ = fs::create_dir_all(&dir);
-        if let Some(saved) = fs::read_to_string(dir.join("clipboard.json"))
-            .ok()
-            .and_then(|s| serde_json::from_str::<Vec<Entry>>(&s).ok())
-        {
+        let stored = fs::read_to_string(dir.join("clipboard.json")).unwrap_or_default();
+        if let Some(saved) = secret::open(stored.trim()).and_then(|s| serde_json::from_str::<Vec<Entry>>(&s).ok()) {
             *history.entries.lock().unwrap() = saved;
         }
         *history.dir.lock().unwrap() = Some(dir);
+        // A history kept in the clear by earlier versions gets sealed now.
+        if !stored.is_empty() && !stored.starts_with("dpapi:") {
+            history.seal_old_files();
+        }
     }
     // Entries may have outlived the keep-days setting while Lumen was off.
     history.trim(&settings::get(&app).clipboard);
@@ -289,6 +317,15 @@ fn ignored(prefs: &ClipboardPrefs, app: &str) -> bool {
     let norm = |s: &str| s.trim().to_lowercase().trim_end_matches(".exe").to_string();
     let app = norm(app);
     prefs.ignore.iter().any(|i| norm(i) == app)
+}
+
+/// A history image's PNG bytes, sealed or (from earlier versions) not.
+fn read_image(path: &Path) -> Option<Vec<u8>> {
+    let bytes = fs::read(path).ok()?;
+    if bytes.starts_with(PNG_SIGNATURE) {
+        return Some(bytes);
+    }
+    secret::open_bytes(&bytes)
 }
 
 fn now_ms() -> u64 {

@@ -1,6 +1,7 @@
-//! Secrets at rest (the Discord app secret and access token), sealed with
-//! DPAPI for the current Windows user: a copy of the file taken to another
-//! account or PC, from a backup or a synced profile, can't be read.
+//! Secrets at rest (the Discord app secret and access token, the clipboard
+//! history), sealed with DPAPI for the current Windows user: a copy of the
+//! file taken to another account or PC, from a backup or a synced profile,
+//! can't be read.
 
 use std::{ptr, slice};
 
@@ -34,6 +35,16 @@ pub fn open(stored: &str) -> Option<String> {
     };
     let plain = crypt(&STANDARD.decode(encoded).ok()?, false)?;
     String::from_utf8(plain).ok()
+}
+
+/// Bytes sealed as they are, for files.
+pub fn seal_bytes(plain: &[u8]) -> Option<Vec<u8>> {
+    crypt(plain, true)
+}
+
+/// The plain bytes of sealed ones.
+pub fn open_bytes(sealed: &[u8]) -> Option<Vec<u8>> {
+    crypt(sealed, false)
 }
 
 fn crypt(data: &[u8], protect: bool) -> Option<Vec<u8>> {
@@ -78,6 +89,15 @@ mod tests {
     fn plain_values_pass_through() {
         assert_eq!(open("old plain secret").as_deref(), Some("old plain secret"));
         assert_eq!(seal("").as_deref(), Some(""));
+    }
+
+    #[test]
+    fn seals_and_opens_bytes() {
+        let png = b"\x89PNG\r\n\x1a\nnot really an image";
+        let sealed = seal_bytes(png).unwrap();
+        assert!(!sealed.starts_with(b"\x89PNG"));
+        assert_eq!(open_bytes(&sealed).as_deref(), Some(&png[..]));
+        assert_eq!(open_bytes(png), None);
     }
 
     #[test]
