@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../island/env";
 import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
-import { CollapsedPrefs, IslandPrefs, NightPrefs, NoticePrefs, Settings, updateSettings, Visualizer } from "./useSettings";
+import { CollapsedPrefs, IslandPrefs, NightPrefs, NoticePrefs, Settings, sparksOn, updateSettings } from "./useSettings";
 
 interface Monitor {
   name: string;
@@ -15,10 +15,9 @@ const px = (v: number) => `${v} px`;
 const ms = (v: number) => `${v} мс`;
 const hour = (v: number) => `${String(v).padStart(2, "0")}:00`;
 
-const VIZ_HINTS: Record<Visualizer, string> = {
+const VIZ_HINTS = {
   bars: "Столбики эквалайзера рядом с треком",
   scope: "Светящаяся волна вместо столбиков",
-  particles: "Искры разлетаются от острова на каждый бит",
 };
 
 const NIGHT_HINTS: Record<NightPrefs["mode"], string> = {
@@ -33,6 +32,7 @@ const times = (v: number) => `${String(Number(v.toFixed(2))).replace(".", ",")}�
 export function IslandSection({ settings }: { settings: Settings }) {
   const { island, collapsed, notices, display } = settings;
   const nightPrefs = settings.night;
+  const viz = collapsed.viz === "scope" ? "scope" : "bars";
   const shape = (patch: Partial<IslandPrefs>) => updateSettings({ island: patch });
   const rest = (patch: Partial<CollapsedPrefs>) => updateSettings({ collapsed: patch });
   const notice = (patch: Partial<NoticePrefs>) => updateSettings({ notices: patch });
@@ -162,15 +162,21 @@ export function IslandSection({ settings }: { settings: Settings }) {
         <Row title="Играющий трек" hint="Обложка и название вместо часов">
           <Toggle on={collapsed.track} onChange={(track) => rest({ track })} />
         </Row>
-        <Row title="Визуализация музыки" hint={VIZ_HINTS[collapsed.viz]}>
+        <Row title="Визуализация музыки" hint={VIZ_HINTS[viz]}>
           <Segmented
-            value={collapsed.viz}
+            value={viz}
             options={[
               { value: "bars", label: "Эквалайзер" },
               { value: "scope", label: "Осциллограф" },
-              { value: "particles", label: "Частицы" },
             ]}
-            onChange={(viz) => rest({ viz })}
+            // Leaving the old "particles" choice keeps its sparks.
+            onChange={(next) => rest({ viz: next, sparks: sparksOn(collapsed) })}
+          />
+        </Row>
+        <Row title="Частицы" hint="Искры разлетаются от острова на каждый бит">
+          <Toggle
+            on={sparksOn(collapsed)}
+            onChange={(sparks) => rest({ sparks, viz })}
           />
         </Row>
         <Row title="Погода в капсуле" hint="Лёгкий дождь или снег внутри острова, когда они идут за окном">

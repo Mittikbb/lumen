@@ -25,7 +25,7 @@ import { NightView, useNight } from "../night/NightView";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "./env";
-import { DEFAULT_SETTINGS, formatShortcut, openSettings, useSettings } from "../settings/useSettings";
+import { DEFAULT_SETTINGS, formatShortcut, openSettings, sparksOn, useSettings } from "../settings/useSettings";
 import { useLook } from "../settings/look";
 import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
@@ -487,7 +487,7 @@ export function Island() {
       animate={visible ? here : away}
       transition={visibility}
     >
-      {rest.viz === "particles" && !moves.reduced && (
+      {sparksOn(rest) && !moves.reduced && (
         <BeatSparks island={ref} active={reactive && !expanded && visible} />
       )}
       {flow && (

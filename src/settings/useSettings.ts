@@ -87,9 +87,9 @@ export interface CallPrefs {
 }
 
 /**
- * How music shows in the collapsed island: the equaliser bars, a wave like an
- * oscilloscope's in their place, or the bars plus sparks flying off the
- * island on the beat.
+ * How music shows in the collapsed island: the equaliser bars or a wave like
+ * an oscilloscope's in their place. "particles" is from 0.5.9, when the
+ * sparks were a third choice: it reads as the bars with sparks.
  */
 export type Visualizer = "bars" | "scope" | "particles";
 
@@ -101,9 +101,14 @@ export interface CollapsedPrefs {
   weather: boolean;
   track: boolean;
   viz: Visualizer;
+  /** Sparks flying off the island on the beat, with either visualiser. */
+  sparks: boolean;
   /** Rain or snow falling inside the capsule while it rains or snows outside. */
   weatherFx: boolean;
 }
+
+/** Whether sparks fly off the island on the beat (also the old "particles" choice). */
+export const sparksOn = (c: CollapsedPrefs) => c.sparks || c.viz === "particles";
 
 /** The night screen: a big clock and date that change colour with the time of day. */
 export interface NightPrefs {
@@ -280,7 +285,7 @@ export const DEFAULT_SETTINGS: Settings = {
     closeDelay: 380,
     pull: 1,
   },
-  collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true, viz: "bars", weatherFx: true },
+  collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true, viz: "bars", sparks: false, weatherFx: true },
   night: { mode: "off", from: 22, to: 7 },
   call: {
     style: "classic",
