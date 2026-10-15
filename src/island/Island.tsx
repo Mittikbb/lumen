@@ -18,7 +18,10 @@ import { ShelfPanel } from "../shelf/ShelfPanel";
 import { setCity, useWeather } from "../weather/useWeather";
 import { WeatherPanel } from "../weather/WeatherPanel";
 import { WeatherIcon } from "../weather/WeatherIcon";
-import { condition } from "../weather/conditions";
+import { condition, precipitation } from "../weather/conditions";
+import { WeatherFx } from "../weather/WeatherFx";
+import { BeatSparks, Scope } from "../media/Visualizers";
+import { NightView, useNight } from "../night/NightView";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "./env";
@@ -39,6 +42,9 @@ import { KeyboardDrop, keyboardWidth } from "../devices/KeyboardDrop";
 import { BluetoothView } from "../devices/BluetoothView";
 import type { MotionPrefs } from "../settings/useSettings";
 
+/** The night screen's width, and its height against the usual one. */
+const NIGHT_WIDTH = 262;
+const NIGHT_HEIGHT = 1.55;
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
 const NOTICE_WIDTH = 290;
 const NOTICE_MS = 2600;
@@ -194,10 +200,25 @@ export function Island() {
   // A dragged island stays collapsed so it's easy to place.
   const expanded = (hovered && !drag.dragging) || launcherOpen || dropping;
 
+  // The night screen: a big clock instead of the usual rest view, unless
+  // something else has the island (a notice, a call, music playing).
+  const night = useNight(prefs.night);
+  const showsTrack = !!media && rest.track && (media.playing || !night);
+  const nightShown = night && !notice && !bluetooth && !downloading && !miniCall && !showsTrack;
+  // Rain or snow inside the capsule while it falls outside.
+  const forecast = weatherCity ? weather.forecast : null;
+  const fx = rest.weatherFx && !moves.reduced && forecast ? precipitation(forecast.code) : null;
+
   // Collapsed size: wider for a notice or a call shown inside the island.
   const collapsedSize = {
-    width: notice || bluetooth || downloading ? Math.max(NOTICE_WIDTH, shape.width + 70) : miniCall ? Math.max(shape.width, 250) : shape.width,
-    height: shape.height,
+    width: notice || bluetooth || downloading
+      ? Math.max(NOTICE_WIDTH, shape.width + 70)
+      : miniCall
+        ? Math.max(shape.width, 250)
+        : nightShown
+          ? Math.max(shape.width + 60, rest.weather && forecast ? NIGHT_WIDTH + 50 : NIGHT_WIDTH)
+          : shape.width,
+    height: nightShown ? Math.round(shape.height * NIGHT_HEIGHT) : shape.height,
   };
 
   // "Капля" call style: the call lives in a drop beside the island.
@@ -466,6 +487,9 @@ export function Island() {
       animate={visible ? here : away}
       transition={visibility}
     >
+      {rest.viz === "particles" && !moves.reduced && (
+        <BeatSparks island={ref} active={reactive && !expanded && visible} />
+      )}
       {flow && (
         // "Перелив": a band of the glow's colours running sideways behind the island.
         <motion.div className={`island-flow${glow}`} {...twin(0)} />
@@ -542,6 +566,19 @@ export function Island() {
         transition={shapeTransition(moves)}
         style={{ x, y, scaleX: bumpX, scaleY: bumpY, transformOrigin: "50% 0%" }}
       >
+        <AnimatePresence>
+          {fx && !expanded && (
+            <motion.div
+              key="weather-fx"
+              className="weather-fx-layer"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.8 } }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+            >
+              <WeatherFx fx={fx} />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <AnimatePresence initial={false}>
           {expanded ? (
             <motion.div
@@ -657,7 +694,7 @@ export function Island() {
                 <DownloadView active={downloads.active} done={downloads.done} reduced={moves.reduced} />
               ) : miniCall && voice ? (
                 <MiniCall voice={voice} speakerRight={prefs.call.style === "right"} />
-              ) : media && rest.track ? (
+              ) : media && showsTrack ? (
                 <>
                   {/* After a skip shortcut the track slides the way it went; otherwise it rises. */}
                   <AnimatePresence mode="popLayout" initial={false} custom={skip?.dir ?? 0}>
@@ -675,8 +712,25 @@ export function Island() {
                       <span className="mini-title">{media.title}</span>
                     </motion.div>
                   </AnimatePresence>
-                  <Bars playing={media.playing} reactive={reactive} />
+                  {rest.viz === "scope" && !moves.reduced ? (
+                    <Scope playing={media.playing} reactive={reactive} />
+                  ) : (
+                    <Bars playing={media.playing} reactive={reactive} />
+                  )}
                 </>
+              ) : nightShown ? (
+                <NightView
+                  clock24={rest.clock24}
+                  weather={
+                    rest.weather &&
+                    forecast && (
+                      <>
+                        <WeatherIcon sky={condition(forecast.code).sky} day={forecast.day} />
+                        {forecast.temp}°
+                      </>
+                    )
+                  }
+                />
               ) : (
                 <>
                   <span className="orb" />

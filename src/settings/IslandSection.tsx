@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "../island/env";
 import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
-import { CollapsedPrefs, IslandPrefs, NoticePrefs, Settings, updateSettings } from "./useSettings";
+import { CollapsedPrefs, IslandPrefs, NightPrefs, NoticePrefs, Settings, updateSettings, Visualizer } from "./useSettings";
 
 interface Monitor {
   name: string;
@@ -13,14 +13,30 @@ interface Monitor {
 
 const px = (v: number) => `${v} px`;
 const ms = (v: number) => `${v} мс`;
+const hour = (v: number) => `${String(v).padStart(2, "0")}:00`;
+
+const VIZ_HINTS: Record<Visualizer, string> = {
+  bars: "Столбики эквалайзера рядом с треком",
+  scope: "Светящаяся волна вместо столбиков",
+  particles: "Искры разлетаются от острова на каждый бит",
+};
+
+const NIGHT_HINTS: Record<NightPrefs["mode"], string> = {
+  off: "Крупные часы и дата, цвет меняется со временем суток",
+  schedule: "Крупные часы и дата в заданные часы; играющая музыка важнее",
+  always: "Крупные часы и дата вместо обычного вида в покое",
+};
+
 const times = (v: number) => `${String(Number(v.toFixed(2))).replace(".", ",")}×`;
 
 /** Остров: shape, hover behaviour, what the collapsed island shows, notices. */
 export function IslandSection({ settings }: { settings: Settings }) {
   const { island, collapsed, notices, display } = settings;
+  const nightPrefs = settings.night;
   const shape = (patch: Partial<IslandPrefs>) => updateSettings({ island: patch });
   const rest = (patch: Partial<CollapsedPrefs>) => updateSettings({ collapsed: patch });
   const notice = (patch: Partial<NoticePrefs>) => updateSettings({ notices: patch });
+  const night = (patch: Partial<NightPrefs>) => updateSettings({ night: patch });
   const monitors = useMonitors();
 
   return (
@@ -146,6 +162,45 @@ export function IslandSection({ settings }: { settings: Settings }) {
         <Row title="Играющий трек" hint="Обложка и название вместо часов">
           <Toggle on={collapsed.track} onChange={(track) => rest({ track })} />
         </Row>
+        <Row title="Визуализация музыки" hint={VIZ_HINTS[collapsed.viz]}>
+          <Segmented
+            value={collapsed.viz}
+            options={[
+              { value: "bars", label: "Эквалайзер" },
+              { value: "scope", label: "Осциллограф" },
+              { value: "particles", label: "Частицы" },
+            ]}
+            onChange={(viz) => rest({ viz })}
+          />
+        </Row>
+        <Row title="Погода в капсуле" hint="Лёгкий дождь или снег внутри острова, когда они идут за окном">
+          <Toggle on={collapsed.weatherFx} onChange={(weatherFx) => rest({ weatherFx })} />
+        </Row>
+      </div>
+
+      <Heading>Ночной экран</Heading>
+      <div className="st-card">
+        <Row title="Показывать" hint={NIGHT_HINTS[nightPrefs.mode]}>
+          <Segmented
+            value={nightPrefs.mode}
+            options={[
+              { value: "off", label: "Выкл" },
+              { value: "schedule", label: "По расписанию" },
+              { value: "always", label: "Всегда" },
+            ]}
+            onChange={(mode) => night({ mode })}
+          />
+        </Row>
+        {nightPrefs.mode === "schedule" && (
+          <>
+            <Row title="С">
+              <Slider value={nightPrefs.from} min={0} max={23} format={hour} onChange={(from) => night({ from })} />
+            </Row>
+            <Row title="До">
+              <Slider value={nightPrefs.to} min={0} max={23} format={hour} onChange={(to) => night({ to })} />
+            </Row>
+          </>
+        )}
       </div>
 
       <Heading>Уведомления</Heading>

@@ -86,6 +86,13 @@ export interface CallPrefs {
   tint: "island" | "discord";
 }
 
+/**
+ * How music shows in the collapsed island: the equaliser bars, a wave like an
+ * oscilloscope's in their place, or the bars plus sparks flying off the
+ * island on the beat.
+ */
+export type Visualizer = "bars" | "scope" | "particles";
+
 /** What the collapsed island shows at rest. */
 export interface CollapsedPrefs {
   clock24: boolean;
@@ -93,6 +100,17 @@ export interface CollapsedPrefs {
   date: boolean;
   weather: boolean;
   track: boolean;
+  viz: Visualizer;
+  /** Rain or snow falling inside the capsule while it rains or snows outside. */
+  weatherFx: boolean;
+}
+
+/** The night screen: a big clock and date that change colour with the time of day. */
+export interface NightPrefs {
+  /** "schedule": from `from` until `to` o'clock. */
+  mode: "off" | "schedule" | "always";
+  from: number;
+  to: number;
 }
 
 export interface NoticePrefs {
@@ -199,6 +217,7 @@ export interface Settings {
   look: Look;
   island: IslandPrefs;
   collapsed: CollapsedPrefs;
+  night: NightPrefs;
   call: CallPrefs;
   notices: NoticePrefs;
   motion: MotionPrefs;
@@ -261,7 +280,8 @@ export const DEFAULT_SETTINGS: Settings = {
     closeDelay: 380,
     pull: 1,
   },
-  collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true },
+  collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true, viz: "bars", weatherFx: true },
+  night: { mode: "off", from: 22, to: 7 },
   call: {
     style: "classic",
     notify: { joins: true, mic: true, sound: true, self: true },

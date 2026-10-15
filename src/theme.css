@@ -17,6 +17,10 @@
 @property --b2 { syntax: "<number>"; inherits: true; initial-value: 0; }
 @property --b3 { syntax: "<number>"; inherits: true; initial-value: 0; }
 
+/* The night screen's colours, registered so they drift slowly instead of jumping. */
+@property --night-a { syntax: "<color>"; inherits: true; initial-value: rgb(104, 118, 255); }
+@property --night-b { syntax: "<color>"; inherits: true; initial-value: rgb(178, 110, 255); }
+
 /* Lumen theme. Every visual knob of the island lives here so new themes
    only need to override these variables. */
 :root {
@@ -340,6 +344,101 @@ body,
 @keyframes bar {
   0%, 100% { height: 4px; }
   50% { height: 14px; }
+}
+
+/* "Осциллограф": a wave in place of the bars. */
+.scope {
+  width: 44px;
+  height: 20px;
+  flex: none;
+  margin-right: -4px;
+}
+
+/* "Частицы": sparks off the island on the beat, behind everything else. */
+.beat-sparks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Rain or snow inside the collapsed capsule, under its content. */
+.weather-fx-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.weather-fx {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Night screen: the time large, the date beside it, coloured by the time of day. */
+.night {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 4px;
+  transition:
+    --night-a 60s linear,
+    --night-b 60s linear;
+}
+
+.night::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 45% 120% at 22% 50%, color-mix(in srgb, var(--night-a) 16%, transparent), transparent 70%),
+    radial-gradient(ellipse 40% 120% at 70% 50%, color-mix(in srgb, var(--night-b) 10%, transparent), transparent 70%);
+}
+
+.night-time {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(100deg, var(--night-a), var(--night-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.night-date {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--night-b) 45%, var(--island-fg-muted));
+}
+
+.night-weekday {
+  text-transform: capitalize;
+  color: color-mix(in srgb, var(--night-a) 55%, var(--island-fg));
+}
+
+.night-weather {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--island-fg);
+}
+
+.night-weather .wx-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* Media panel */

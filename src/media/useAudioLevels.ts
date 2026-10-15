@@ -7,6 +7,12 @@ interface Levels {
   bands: [number, number, number, number];
 }
 
+/**
+ * The latest levels, for canvases that draw every frame (the oscilloscope,
+ * the beat sparks) without going through React or CSS.
+ */
+export const audioLevels: Levels = { beat: 0, bands: [0, 0, 0, 0] };
+
 /** How long without sound before falling back to the idle animations. */
 const QUIET_MS = 700;
 
@@ -24,6 +30,8 @@ export function useAudioLevels(): boolean {
     let quietTimer = 0;
 
     const unlisten = listen<Levels>("lumen://audio", ({ payload }) => {
+      audioLevels.beat = payload.beat;
+      audioLevels.bands = payload.bands;
       root.setProperty("--beat", String(payload.beat));
       payload.bands.forEach((b, i) => root.setProperty(`--b${i}`, String(b)));
 
