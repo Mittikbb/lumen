@@ -22,14 +22,35 @@ export function mediaControl(action: MediaAction) {
   if (isTauri) invoke("media_control", { action });
 }
 
+/** An update from the backend: `art` is left out while the cover stays the same. */
+type MediaEvent = Omit<NowPlaying, "art"> & { art?: string | null };
+
 export function useMedia(): NowPlaying | null {
   const [media, setMedia] = useState<NowPlaying | null>(null);
 
   useEffect(() => {
     if (!isTauri) return;
-    invoke<NowPlaying | null>("media_state").then(setMedia);
-    const unlisten = listen<NowPlaying | null>("lumen://media", (e) => setMedia(e.payload));
+    let alive = true;
+    let changed = false;
+    const unlisten = listen<MediaEvent | null>("lumen://media", ({ payload }) => {
+      changed = true;
+      setMedia((prev) =>
+        payload && payload.art === undefined ? { ...payload, art: prev?.art ?? null } : (payload as NowPlaying | null),
+      );
+    });
+    // Read once listening, so no change slips in between. Updates that came
+    // in meanwhile are newer, but may have left out a cover they took as known.
+    unlisten
+      .then(() => invoke<NowPlaying | null>("media_state"))
+      .then((state) => {
+        if (!alive) return;
+        setMedia((prev) => {
+          if (!changed) return state;
+          return prev && state && prev.art === null && trackKey(prev) === trackKey(state) ? { ...prev, art: state.art } : prev;
+        });
+      });
     return () => {
+      alive = false;
       unlisten.then((off) => off());
     };
   }, []);

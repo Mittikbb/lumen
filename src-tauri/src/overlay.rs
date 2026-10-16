@@ -16,11 +16,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, State, WebviewWindow};
 use windows::Win32::{
-    Foundation::{HWND, RECT},
+    Foundation::{HWND, POINT, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
-    UI::WindowsAndMessaging::{
-        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsZoomed,
-        SetForegroundWindow,
+    UI::{
+        HiDpi::GetDpiForWindow,
+        WindowsAndMessaging::{
+            GetClassNameW, GetCursorPos, GetForegroundWindow, GetWindowRect,
+            GetWindowThreadProcessId, IsZoomed, SetForegroundWindow,
+        },
     },
 };
 
@@ -81,6 +84,14 @@ pub struct AnchorState(Mutex<Option<Anchor>>);
 /// Set while the island is being dragged with Ctrl held.
 #[derive(Default)]
 pub struct Dragging(AtomicBool);
+
+/// Set while the island's window is hidden behind a fullscreen app, so the
+/// streams only it shows (cursor, audio levels) can pause.
+static HIDDEN: AtomicBool = AtomicBool::new(false);
+
+pub fn hidden() -> bool {
+    HIDDEN.load(Ordering::Relaxed)
+}
 
 #[tauri::command]
 pub fn set_hit_region(rects: Vec<Rect>, region: State<HitRegion>) {
@@ -332,30 +343,53 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
         let mut was_catching = false;
         let mut was_near = false;
 
+        // The window and its handle, looked up once.
+        let (window, hwnd) = loop {
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(hwnd) = window.hwnd() {
+                    break (window, hwnd.0 as isize);
+                }
+            }
+            thread::sleep(Duration::from_millis(16));
+        };
+
         loop {
             thread::sleep(Duration::from_millis(16));
-
-            let Some(window) = app.get_webview_window("main") else {
+            if hidden() {
                 continue;
+            }
+
+            // Straight from Win32 (what tauri reads underneath too): tauri's
+            // getters each make a round trip through the main thread, and
+            // three of them every 16 ms kept the event loop busy.
+            let hwnd = HWND(hwnd as *mut _);
+            let mut cursor = POINT::default();
+            let mut origin = RECT::default();
+            let dpi = unsafe {
+                if GetCursorPos(&mut cursor).is_err() || GetWindowRect(hwnd, &mut origin).is_err() {
+                    continue;
+                }
+                GetDpiForWindow(hwnd)
             };
-            let (Ok(cursor), Ok(origin), Ok(scale)) = (
-                app.cursor_position(),
-                window.outer_position(),
-                window.scale_factor(),
-            ) else {
+            if dpi == 0 {
                 continue;
+            }
+            let scale = dpi as f64 / 96.0;
+
+            let x = (cursor.x - origin.left) as f64 / scale;
+            let y = (cursor.y - origin.top) as f64 / scale;
+            let region = app.state::<HitRegion>();
+            let (inside, catches, near) = {
+                let rects = region.0.lock().unwrap();
+                let island = rects.first().copied().unwrap_or_default();
+                // `inside` tells the frontend the pointer is over the island; the
+                // window also catches it over the rest (the drop), for clicks.
+                (
+                    island.contains(x, y, HIT_PADDING),
+                    rects.iter().any(|r| r.contains(x, y, HIT_PADDING)),
+                    island.contains(x, y, NEAR_ZONE),
+                )
             };
-
-            let x = (cursor.x - origin.x as f64) / scale;
-            let y = (cursor.y - origin.y as f64) / scale;
-            let rects = app.state::<HitRegion>().0.lock().unwrap().clone();
-            let island = rects.first().copied().unwrap_or_default();
-
-            // `inside` tells the frontend the pointer is over the island; the
-            // window also catches it over the rest (the drop), for clicks.
-            let inside = island.contains(x, y, HIT_PADDING);
-            let catches = rects.iter().any(|r| r.contains(x, y, HIT_PADDING));
-            let near = island.contains(x, y, NEAR_ZONE);
 
             // While dragging, the window keeps the mouse (see overlay_drag_start).
             if app.state::<Dragging>().0.load(Ordering::SeqCst) {
@@ -390,7 +424,7 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
             let Ok(hwnd) = window.hwnd() else {
                 continue;
             };
-            let display = settings::get(&app).display;
+            let display = settings::read(&app, |s| s.display.clone());
             let hide = (display.hide_fullscreen || display.hide_maximized) && {
                 let cover = cover_in_front(HWND(hwnd.0));
                 (display.hide_fullscreen && cover.fullscreen)
@@ -403,7 +437,9 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
                     let _ = window.emit("lumen://visibility", false);
                     thread::sleep(HIDE_ANIMATION);
                     let _ = window.hide();
+                    HIDDEN.store(true, Ordering::Relaxed);
                 } else {
+                    HIDDEN.store(false, Ordering::Relaxed);
                     let _ = window.show();
                     let _ = window.emit("lumen://visibility", true);
                 }

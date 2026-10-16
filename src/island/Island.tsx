@@ -1,6 +1,6 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
-import { useCursor } from "./useCursor";
+import { Cursor, useCursorListener } from "./useCursor";
 import { useAnchor } from "./useAnchor";
 import { useIslandDrag } from "./useIslandDrag";
 import { useHitRegion } from "./useHitRegion";
@@ -128,7 +128,12 @@ export function Island() {
   const timerRef = useRef<HTMLDivElement>(null);
   const drag = useIslandDrag(ref);
   const anchor = useAnchor();
-  const cursor = useCursor();
+  // The pointer streams in ~60 times a second while it's near. It's kept out
+  // of state: the lean follows it directly (below), and the island only
+  // re-renders when what it shows changes (over the island, near or on the drop).
+  const cursorRef = useRef<Cursor | null>(null);
+  const cursor = cursorRef.current;
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
   const media = useMedia();
   const settings = useSettings();
   const prefs = settings ?? DEFAULT_SETTINGS;
@@ -227,6 +232,12 @@ export function Island() {
   const dropCall = voice && showsTab("call") && prefs.call.style === "drop" ? voice : null;
   const drop = dropGeometry(center, top, collapsedSize.width, shape.height, "left");
   const dropAt = dropHover(cursor, drop, shape.height, prefs.call.reach);
+  const hoverOf = (c: Cursor | null) => {
+    const at = dropHover(c, drop, shape.height, prefs.call.reach);
+    return `${!!c?.inside}|${at.over}|${at.near}`;
+  };
+  const hover = useRef({ of: hoverOf, shown: "" });
+  hover.current = { of: hoverOf, shown: hoverOf(cursor) };
   const onDrop = !!dropCall && !expanded && !drag.dragging && dropAt.over;
   // Joins, leaves, mic and sound changes: the drop pops out to tell.
   const callEvent = useCallEvents(dropCall, discord.userId, dropCall && prefs.call);
@@ -343,8 +354,9 @@ export function Island() {
   const scaleX = useSpring(1, leanSpring);
   const scaleY = useSpring(1, leanSpring);
 
-  useEffect(() => {
+  const lean = () => {
     const el = ref.current;
+    const cursor = cursorRef.current;
     let pull = 0;
     let dx = 0;
     let dy = 0;
@@ -360,7 +372,16 @@ export function Island() {
     y.set(clamp(dy * 0.05, 0, 8) * pull);
     scaleX.set(1 + 0.07 * pull);
     scaleY.set(1 + 0.1 * pull);
-  }, [cursor, expanded, moves.reduced, drag.dragging, shape.pull, x, y, scaleX, scaleY]);
+  };
+  const leanRef = useRef(lean);
+  leanRef.current = lean;
+  useEffect(lean, [expanded, moves.reduced, drag.dragging, shape.pull, x, y, scaleX, scaleY]);
+
+  useCursorListener((c) => {
+    cursorRef.current = c;
+    leanRef.current();
+    if (hover.current.of(c) !== hover.current.shown) rerender();
+  });
 
   // Track change: a quick squash-and-stretch "gulp", layered on top of the lean.
   const bump = useMotionValue(1);

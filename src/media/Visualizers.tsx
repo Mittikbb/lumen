@@ -34,6 +34,16 @@ export function Scope({ playing, reactive }: { playing: boolean; reactive: boole
   const ref = useRef<HTMLCanvasElement>(null);
   const amps = useRef([0, 0, 0, 0]);
   const glow = useGlowColors();
+  /** Colours of the last frame drawn. */
+  const drawn = useRef({ a: "", b: "" });
+
+  // On pause the trace settles flat; from then on it stays as drawn until the
+  // music or the glow's colours change, rather than being redrawn every frame.
+  const still = (t: number) => {
+    if (playing || reactive || amps.current.some((v) => v !== 0)) return false;
+    const { a, b } = glow(t);
+    return a === drawn.current.a && b === drawn.current.b;
+  };
 
   useCanvasLoop(ref, (ctx, w, h, dt, t) => {
     const a = amps.current;
@@ -46,9 +56,12 @@ export function Scope({ playing, reactive }: { playing: boolean; reactive: boole
       // Quick to rise, slower to settle, like the bars.
       const rate = target > a[i] ? 18 : 6;
       a[i] += (target - a[i]) * Math.min(1, rate * dt);
+      // Below a hundredth of a pixel: flat.
+      if (target === 0 && Math.abs(a[i]) < 1e-3) a[i] = 0;
     }
     const lift = reactive ? 1 + 0.5 * audioLevels.beat : 1;
     const { a: ca, b: cb } = glow(t);
+    drawn.current = { a: ca, b: cb };
     const mid = h / 2;
     const room = mid - 2;
 
@@ -90,7 +103,7 @@ export function Scope({ playing, reactive }: { playing: boolean; reactive: boole
     trace(0);
     ctx.stroke();
     ctx.shadowBlur = 0;
-  });
+  }, true, still);
 
   return <canvas ref={ref} className="scope" aria-hidden />;
 }

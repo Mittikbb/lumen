@@ -79,7 +79,7 @@ pub fn spawn_watcher(app: AppHandle) {
         let mut last_sent = String::new();
         loop {
             thread::sleep(POLL);
-            let dir = match settings::get(&app).downloads.enabled.then(downloads_dir).flatten() {
+            let dir = match settings::read(&app, |s| s.downloads.enabled).then(downloads_dir).flatten() {
                 Some(dir) => dir,
                 None => {
                     if !seen.is_empty() || !last_sent.is_empty() {
