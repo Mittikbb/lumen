@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isMac } from "../island/env";
 import { ENGINES } from "../launcher/engines";
 import { playerName } from "../media/useMedia";
 import { playChime } from "../timer/timer";
@@ -91,18 +92,23 @@ export function ModulesSection({ settings }: { settings: Settings }) {
       <Heading>Погода</Heading>
       <WeatherSettings settings={settings} />
 
-      <Heading>Медиа</Heading>
-      <div className="st-card">
-        <Row title="Ползунок громкости" hint="Регулировка громкости трека прямо в плеере">
-          <Toggle
-            on={settings.media?.volumeSlider ?? true}
-            onChange={(volumeSlider) => updateSettings({ media: { volumeSlider } })}
-          />
-        </Row>
-      </div>
+      {/* No "now playing" on macOS yet. */}
+      {!isMac && (
+        <>
+          <Heading>Медиа</Heading>
+          <div className="st-card">
+            <Row title="Ползунок громкости" hint="Регулировка громкости трека прямо в плеере">
+              <Toggle
+                on={settings.media?.volumeSlider ?? true}
+                onChange={(volumeSlider) => updateSettings({ media: { volumeSlider } })}
+              />
+            </Row>
+          </div>
 
-      <Heading>Плееры</Heading>
-      <Players players={settings.players} />
+          <Heading>Плееры</Heading>
+          <Players players={settings.players} />
+        </>
+      )}
 
       <Heading>Загрузки</Heading>
       <div className="st-card">

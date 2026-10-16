@@ -24,10 +24,10 @@ import { BeatSparks, Scope } from "../media/Visualizers";
 import { NightView, useNight } from "../night/NightView";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { isTauri } from "./env";
+import { isMac, isTauri } from "./env";
 import { DEFAULT_SETTINGS, formatShortcut, openSettings, sparksOn, useSettings } from "../settings/useSettings";
 import { useLook } from "../settings/look";
-import { TABS, TabId } from "./tabs";
+import { PLATFORM_TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MIC_OFF, MiniCall } from "../discord/CallPanel";
 import { CallDrop, notifyWidth } from "../discord/CallDrop";
@@ -160,7 +160,7 @@ export function Island() {
   const launcherOpen = useLauncherOpen();
   const shelfItems = useShelf();
   const hidden = settings?.hiddenTabs ?? [];
-  const tabs = TABS.filter(
+  const tabs = PLATFORM_TABS.filter(
     (t) => t.id === "launcher" || (!hidden.includes(t.id) && (t.id !== "call" || !!voice)),
   );
   const showsTab = (id: TabId) => tabs.some((t) => t.id === id);
@@ -645,14 +645,17 @@ export function Island() {
                   >
                     {SHOT_ICON}
                   </button>
-                  <button
-                    className="tool"
-                    aria-label="Текст с экрана"
-                    title={`Текст с экрана · ${formatShortcut(hotkeys.text)}`}
-                    onClick={() => capture("text")}
-                  >
-                    {SCAN_ICON}
-                  </button>
+                  {/* No text recognition on macOS yet. */}
+                  {!isMac && (
+                    <button
+                      className="tool"
+                      aria-label="Текст с экрана"
+                      title={`Текст с экрана · ${formatShortcut(hotkeys.text)}`}
+                      onClick={() => capture("text")}
+                    >
+                      {SCAN_ICON}
+                    </button>
+                  )}
                   <button className="tool" aria-label="Настройки" title="Настройки" onClick={openSettings}>
                     {SETTINGS_ICON}
                   </button>

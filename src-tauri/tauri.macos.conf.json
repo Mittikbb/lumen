@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "shortDescription": "A living island at the top of your Mac's screen",
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

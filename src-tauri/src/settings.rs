@@ -82,6 +82,7 @@ pub struct PlayerPrefs {
 }
 
 /// Adds a player to the known ones the first time it plays something.
+#[cfg_attr(not(windows), allow(dead_code))] // no "now playing" on macOS yet
 pub fn remember_player(app: &AppHandle, id: &str) {
     let mut known = get(app).players.known;
     if known.iter().any(|k| k == id) {

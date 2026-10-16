@@ -1,6 +1,6 @@
 //! Web browsers: the installed ones come from the list Windows keeps for
-//! "Default apps" (StartMenuInternet), and links open in the one picked in
-//! settings.
+//! "Default apps" (StartMenuInternet), or on macOS from the well-known apps
+//! in /Applications, and links open in the one picked in settings.
 
 use std::{path::Path, process::Command};
 
@@ -8,20 +8,22 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{
-    registry::{self, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE},
-    settings,
-};
+#[cfg(windows)]
+use crate::registry::{self, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+use crate::settings;
 
+#[cfg(windows)]
 const CLIENTS: &str = r"SOFTWARE\Clients\StartMenuInternet";
 /// Settings value for "the browser Windows uses by default".
 const SYSTEM: &str = "system";
 
 #[derive(Clone, Serialize)]
 pub struct Browser {
-    /// Registry key name, stable across updates (e.g. "Google Chrome").
+    /// Registry key name, stable across updates (e.g. "Google Chrome"); on
+    /// macOS the app's bundle name.
     id: String,
     name: String,
+    /// The browser's .exe, or its .app bundle on macOS.
     #[serde(skip)]
     exe: String,
 }
@@ -49,7 +51,7 @@ pub fn open_url(app: &AppHandle, url: &str) -> Result<(), String> {
         None => chrome(&all),
     };
     if let Some(browser) = browser {
-        if Command::new(&browser.exe).arg(url).spawn().is_ok() {
+        if launch(&browser, url).spawn().is_ok() {
             return Ok(());
         }
     }
@@ -62,7 +64,22 @@ fn chrome(all: &[Browser]) -> Option<Browser> {
     all.iter().find(|b| b.name.contains("Chrome")).cloned()
 }
 
+#[cfg(windows)]
+fn launch(browser: &Browser, url: &str) -> Command {
+    let mut command = Command::new(&browser.exe);
+    command.arg(url);
+    command
+}
+
+#[cfg(target_os = "macos")]
+fn launch(browser: &Browser, url: &str) -> Command {
+    let mut command = Command::new("/usr/bin/open");
+    command.arg("-a").arg(&browser.exe).arg(url);
+    command
+}
+
 /// Browsers registered for the current user and machine-wide.
+#[cfg(windows)]
 fn installed() -> Vec<Browser> {
     let mut all: Vec<Browser> = Vec::new();
     for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
@@ -88,7 +105,37 @@ fn installed() -> Vec<Browser> {
     all
 }
 
+/// Browsers macOS users usually have, found in /Applications or ~/Applications.
+#[cfg(target_os = "macos")]
+fn installed() -> Vec<Browser> {
+    const KNOWN: [&str; 10] = [
+        "Google Chrome",
+        "Safari",
+        "Firefox",
+        "Arc",
+        "Brave Browser",
+        "Microsoft Edge",
+        "Opera",
+        "Opera GX",
+        "Yandex",
+        "Vivaldi",
+    ];
+    let home = std::env::var("HOME").unwrap_or_default();
+    let mut all: Vec<Browser> = KNOWN
+        .iter()
+        .filter_map(|name| {
+            let exe = [format!("/Applications/{name}.app"), format!("{home}/Applications/{name}.app")]
+                .into_iter()
+                .find(|p| Path::new(p).exists())?;
+            Some(Browser { id: name.to_string(), name: name.to_string(), exe })
+        })
+        .collect();
+    all.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    all
+}
+
 /// `"C:\...\chrome.exe" --flag` → `C:\...\chrome.exe`.
+#[cfg(windows)]
 fn exe_path(command: &str) -> Option<String> {
     let command = command.trim();
     let path = match command.strip_prefix('"') {

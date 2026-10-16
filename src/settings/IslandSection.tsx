@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { isTauri } from "../island/env";
+import { isMac, isTauri } from "../island/env";
 import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
 import { CollapsedPrefs, IslandPrefs, NightPrefs, NoticePrefs, Settings, sparksOn, updateSettings } from "./useSettings";
 
@@ -93,28 +93,34 @@ export function IslandSection({ settings }: { settings: Settings }) {
             </button>
           )}
         </Row>
-        <Row title="Прятать в полноэкранных приложениях" hint="Игры, видео на весь экран, презентации">
-          <Toggle
-            on={display.hideFullscreen}
-            onChange={(hideFullscreen) => updateSettings({ display: { hideFullscreen } })}
-          />
-        </Row>
-        <Row title="FPS и нагрузка в играх" hint="Когда запускается игра, остров выезжает на пару секунд с FPS, CPU, GPU и памятью и уезжает обратно">
-          <span className="st-colors">
-            {settings.games.stats && isTauri && (
-              <button className="st-button quiet" onClick={() => invoke("games_preview")}>
-                Показать
-              </button>
-            )}
-            <Toggle on={settings.games.stats} onChange={(stats) => updateSettings({ games: { stats } })} />
-          </span>
-        </Row>
-        <Row title="Прятать при развёрнутых окнах" hint="Когда активное окно развёрнуто на весь экран">
-          <Toggle
-            on={display.hideMaximized}
-            onChange={(hideMaximized) => updateSettings({ display: { hideMaximized } })}
-          />
-        </Row>
+        {/* macOS keeps fullscreen apps in their own Space, where the island
+            doesn't go; games and maximized windows aren't watched there yet. */}
+        {!isMac && (
+          <>
+            <Row title="Прятать в полноэкранных приложениях" hint="Игры, видео на весь экран, презентации">
+              <Toggle
+                on={display.hideFullscreen}
+                onChange={(hideFullscreen) => updateSettings({ display: { hideFullscreen } })}
+              />
+            </Row>
+            <Row title="FPS и нагрузка в играх" hint="Когда запускается игра, остров выезжает на пару секунд с FPS, CPU, GPU и памятью и уезжает обратно">
+              <span className="st-colors">
+                {settings.games.stats && isTauri && (
+                  <button className="st-button quiet" onClick={() => invoke("games_preview")}>
+                    Показать
+                  </button>
+                )}
+                <Toggle on={settings.games.stats} onChange={(stats) => updateSettings({ games: { stats } })} />
+              </span>
+            </Row>
+            <Row title="Прятать при развёрнутых окнах" hint="Когда активное окно развёрнуто на весь экран">
+              <Toggle
+                on={display.hideMaximized}
+                onChange={(hideMaximized) => updateSettings({ display: { hideMaximized } })}
+              />
+            </Row>
+          </>
+        )}
         <Row
           title="Раскрывать"
           hint={island.openOn === "click" ? "Сворачивается, когда уводишь курсор" : "Когда курсор задерживается на острове"}

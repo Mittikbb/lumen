@@ -1,15 +1,19 @@
 //! HTTP from the backend goes through the same proxy as the user's other apps:
 //! HTTPS_PROXY / ALL_PROXY if set, otherwise the Windows proxy from Internet
 //! Options (what VPN clients such as v2rayN switch on). Without it, requests
-//! to blocked hosts like discord.com just time out.
+//! to blocked hosts like discord.com just time out. On macOS only the
+//! environment is read so far (the system proxy is in `scutil --proxy`).
 
 use std::time::Duration;
 
+#[cfg(windows)]
 use crate::registry::{self, HKEY_CURRENT_USER};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
+#[cfg(windows)]
 const INTERNET_SETTINGS: &str = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
 
+#[cfg_attr(not(windows), allow(dead_code))] // for Discord, not on macOS yet
 pub fn agent() -> ureq::Agent {
     let mut builder = ureq::AgentBuilder::new().timeout(TIMEOUT);
     if let Some(proxy) = system_proxy().and_then(|p| ureq::Proxy::new(p).ok()) {
@@ -26,6 +30,16 @@ pub fn system_proxy() -> Option<String> {
             }
         }
     }
+    windows_proxy()
+}
+
+#[cfg(not(windows))]
+fn windows_proxy() -> Option<String> {
+    None
+}
+
+#[cfg(windows)]
+fn windows_proxy() -> Option<String> {
     if registry::dword(HKEY_CURRENT_USER, INTERNET_SETTINGS, "ProxyEnable")? == 0 {
         return None;
     }

@@ -1,25 +1,42 @@
+// Modules with no macOS backend yet are either left out there (`cfg(windows)`)
+// or swapped for a stand-in from `macos/` with the same commands, which
+// answer "nothing here" or "unsupported" so the frontend keeps working.
+#[cfg(windows)]
 mod audio;
+#[cfg(windows)]
 mod bluetooth;
 mod browser;
+#[cfg_attr(target_os = "macos", path = "macos/capture.rs")]
 mod capture;
 mod clipboard;
+#[cfg_attr(target_os = "macos", path = "macos/discord.rs")]
 mod discord;
 mod downloads;
+#[cfg(target_os = "macos")]
+#[path = "macos/front.rs"]
+mod front;
+#[cfg_attr(target_os = "macos", path = "macos/games.rs")]
 mod games;
 mod hotkeys;
+#[cfg(windows)]
 mod keyboard;
 mod launcher;
+#[cfg_attr(target_os = "macos", path = "macos/media.rs")]
 mod media;
 mod net;
 mod overlay;
 mod pixels;
+#[cfg(windows)]
 mod registry;
+#[cfg_attr(target_os = "macos", path = "macos/secret.rs")]
 mod secret;
 mod settings;
 mod shelf;
+#[cfg_attr(target_os = "macos", path = "macos/shell_image.rs")]
 mod shell_image;
 mod tray;
 mod updates;
+#[cfg_attr(target_os = "macos", path = "macos/volume.rs")]
 mod volume;
 
 use tauri::Manager;
@@ -114,21 +131,31 @@ pub fn run() {
                 .expect("main window is missing");
 
             settings::init(app.handle());
+            // No Dock icon: the island and the menu bar icon are Lumen's handles.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             overlay::dock_to_top(&window)?;
             overlay::spawn_cursor_tracker(app.handle().clone());
-            overlay::spawn_fullscreen_watch(app.handle().clone());
-            media::spawn_watcher(app.handle().clone());
-            audio::spawn_analyser(app.handle().clone());
+            #[cfg(windows)]
+            {
+                overlay::spawn_fullscreen_watch(app.handle().clone());
+                media::spawn_watcher(app.handle().clone());
+                audio::spawn_analyser(app.handle().clone());
+            }
             clipboard::spawn_watcher(app.handle().clone());
             launcher::init(app.handle());
             hotkeys::init(app.handle())?;
             shelf::init(app.handle());
             tray::init(app.handle())?;
+            #[cfg(windows)]
             discord::init(app.handle());
             updates::spawn_checker(app.handle().clone());
             downloads::spawn_watcher(app.handle().clone());
-            keyboard::spawn_watcher(app.handle().clone());
-            bluetooth::spawn_watcher(app.handle().clone());
+            #[cfg(windows)]
+            {
+                keyboard::spawn_watcher(app.handle().clone());
+                bluetooth::spawn_watcher(app.handle().clone());
+            }
 
             Ok(())
         })
