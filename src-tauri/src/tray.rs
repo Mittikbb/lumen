@@ -3,6 +3,7 @@
 
 use std::fs;
 
+use serde::Serialize;
 use tauri::{
     AppHandle, Emitter, Manager, Wry,
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
@@ -10,13 +11,23 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::{registry, settings};
+use windows::Win32::Foundation::HWND;
+
+use crate::{logon_task, registry, settings};
 
 /// Where Windows keeps per-user autostart entries.
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 /// Marks that autostart was set up once, so a user's "off" choice sticks.
 const AUTOSTART_MARKER: &str = "autostart-configured";
+
+/// How Lumen starts with Windows: `admin` means through the elevated
+/// logon task instead of the Run key.
+#[derive(Clone, Copy, Serialize)]
+pub struct Autostart {
+    pub on: bool,
+    pub admin: bool,
+}
 
 /// The menu's autostart checkbox, kept in sync when the settings window flips it.
 struct AutostartItem(CheckMenuItem<Wry>);
@@ -36,7 +47,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
             "Автозапуск (только в установленной версии)"
         },
         release,
-        autostart(app).unwrap_or(false),
+        autostart(app).is_some_and(|a| a.on),
         None::<&str>,
     )?;
     let open_settings = MenuItem::with_id(app, "settings", "Настройки…", true, None::<&str>)?;
@@ -61,8 +72,13 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                 let _ = settings::open(app);
             }
             "autostart" => {
-                let on = autostart(app).unwrap_or(false);
-                set_autostart(app, !on);
+                // Turning off the admin task waits on a UAC prompt: not here,
+                // on the UI thread.
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    let on = autostart(&app).is_some_and(|a| a.on);
+                    set_autostart(&app, !on);
+                });
             }
             "quit" => app.exit(0),
             _ => {}
@@ -71,31 +87,68 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Whether Lumen starts with Windows; `None` in dev builds.
-pub fn autostart(app: &AppHandle) -> Option<bool> {
+/// Whether and how Lumen starts with Windows; `None` in dev builds.
+pub fn autostart(app: &AppHandle) -> Option<Autostart> {
     if cfg!(debug_assertions) {
         return None;
     }
-    Some(app.autolaunch().is_enabled().unwrap_or(false))
+    let admin = logon_task::exists();
+    let on = admin || app.autolaunch().is_enabled().unwrap_or(false);
+    Some(Autostart { on, admin })
 }
 
-/// Turns autostart on or off and returns the resulting state.
-pub fn set_autostart(app: &AppHandle, on: bool) -> Option<bool> {
+/// Turns autostart on or off and returns the resulting state. Turning it off
+/// also removes the admin task, which asks for UAC.
+pub fn set_autostart(app: &AppHandle, on: bool) -> Option<Autostart> {
     if cfg!(debug_assertions) {
         return None;
     }
     let manager = app.autolaunch();
-    let _ = if on {
-        manager.enable()
+    if on {
+        if !logon_task::exists() {
+            let _ = manager.enable();
+        }
     } else {
-        manager.disable()
-    };
-    let now = manager.is_enabled().unwrap_or(false);
+        let _ = manager.disable();
+        if logon_task::exists() {
+            logon_task::remove(uac_parent(app));
+        }
+    }
+    publish(app)
+}
+
+/// Switches autostart between the Run key and the elevated logon task. Blocks
+/// until the user answers the UAC prompt; declining it changes nothing.
+pub fn set_autostart_admin(app: &AppHandle, admin: bool) -> Option<Autostart> {
+    if cfg!(debug_assertions) {
+        return None;
+    }
+    let manager = app.autolaunch();
+    if admin {
+        // Only one of the two may start Lumen.
+        if logon_task::create(uac_parent(app)) {
+            let _ = manager.disable();
+        }
+    } else if logon_task::remove(uac_parent(app)) {
+        let _ = manager.enable();
+    }
+    publish(app)
+}
+
+/// Syncs the tray checkbox and the settings window with the current state.
+fn publish(app: &AppHandle) -> Option<Autostart> {
+    let now = autostart(app)?;
     if let Some(item) = app.try_state::<AutostartItem>() {
-        let _ = item.0.set_checked(now);
+        let _ = item.0.set_checked(now.on);
     }
     let _ = app.emit("lumen://autostart", now);
     Some(now)
+}
+
+/// The settings window, so the UAC prompt comes up over it.
+fn uac_parent(app: &AppHandle) -> Option<HWND> {
+    let hwnd = app.get_webview_window(settings::WINDOW)?.hwnd().ok()?;
+    Some(HWND(hwnd.0))
 }
 
 /// Turns autostart on at the first run. Later runs fix the entry only if it

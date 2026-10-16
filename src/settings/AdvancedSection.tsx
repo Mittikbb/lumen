@@ -1,7 +1,10 @@
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Heading, Row, Segmented, Toggle } from "./controls";
 import { CodeBorderColor, Settings, updateSettings } from "./useSettings";
 import { GITHUB_REPO_URL } from "../launcher/httpCodes";
+import { useAutostart } from "./autostart";
 
 const BORDER_COLOR_OPTIONS: { value: CodeBorderColor; label: string }[] = [
   { value: "code", label: "Цвет кода" },
@@ -10,16 +13,45 @@ const BORDER_COLOR_OPTIONS: { value: CodeBorderColor; label: string }[] = [
 
 /**
  * Расширенные: hidden until 10 taps on the logo in О Lumen. The HTTP codes and
- * network protocols lookup (off by default), its card's look, Protocol-list.
+ * network protocols lookup (off by default), its card's look, Protocol-list,
+ * and starting with Windows as administrator.
  */
 export function AdvancedSection({ settings }: { settings: Settings }) {
   const advanced = settings.advanced;
+  const autostart = useAutostart();
+  // Waiting on the UAC prompt.
+  const [elevating, setElevating] = useState(false);
 
   const setAdvanced = (patch: Partial<typeof advanced>) =>
     updateSettings({ advanced: patch });
 
+  const setAdmin = (admin: boolean) => {
+    setElevating(true);
+    invoke("settings_set_autostart_admin", { admin }).finally(() => setElevating(false));
+  };
+
   return (
     <>
+      <Heading>Запуск</Heading>
+      <div className="st-card">
+        <Row
+          title="Автозапуск от имени администратора"
+          hint={
+            autostart === null
+              ? "Работает только в установленной версии"
+              : !autostart.on
+                ? "Сначала включи «Запускать вместе с Windows» в «Общих»"
+                : "Через Планировщик заданий, Windows один раз спросит разрешение. Файлы из Проводника на остров перетаскиваться не будут"
+          }
+        >
+          <Toggle
+            on={!!autostart?.admin}
+            disabled={!autostart?.on || elevating}
+            onChange={setAdmin}
+          />
+        </Row>
+      </div>
+
       <Heading>Справочник кодов и протоколов</Heading>
       <div className="st-card">
         <Row title="Справочник в поиске" hint="h:404, h:dns, h:wireguard или hHelp: — Enter открывает карточку">

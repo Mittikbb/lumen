@@ -9,6 +9,7 @@ mod games;
 mod hotkeys;
 mod keyboard;
 mod launcher;
+mod logon_task;
 mod media;
 mod net;
 mod overlay;
@@ -95,6 +96,7 @@ pub fn run() {
             settings::settings_update,
             settings::settings_autostart,
             settings::settings_set_autostart,
+            settings::settings_set_autostart_admin,
             settings::settings_open,
             browser::browser_list,
             discord::discord_status,
