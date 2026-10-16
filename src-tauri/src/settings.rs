@@ -313,6 +313,12 @@ pub fn get(app: &AppHandle) -> Settings {
     app.state::<Store>().settings.lock().unwrap().clone()
 }
 
+/// A part of the settings, without cloning the rest: for loops that look
+/// several times a second.
+pub fn read<T>(app: &AppHandle, f: impl FnOnce(&Settings) -> T) -> T {
+    f(&app.state::<Store>().settings.lock().unwrap())
+}
+
 #[tauri::command]
 pub fn settings_get(store: State<Store>) -> Settings {
     store.settings.lock().unwrap().clone()

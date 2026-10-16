@@ -64,8 +64,10 @@ export function MediaPanel({ media }: { media: NowPlaying | null }) {
             <span>{formatTime(media.durationMs)}</span>
           </div>
         ) : (
-          // Players like Telegram don't report length: show a running bar instead.
+          // Players like Telegram don't report length: show how long it's been
+          // playing (when we saw it start) and a running bar instead.
           <div className="media-progress">
+            {media.positionMs > 0 && <span>{formatTime(media.positionMs)}</span>}
             <div className={`bar unknown${media.playing ? " live" : ""}`}>
               <div className="bar-fill" />
             </div>

@@ -1,9 +1,13 @@
+import { lazy, Suspense } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Island } from "./island/Island";
-import { CaptureOverlay } from "./capture/CaptureOverlay";
-import { SettingsWindow } from "./settings/SettingsWindow";
 import { isTauri } from "./island/env";
 import "./theme.css";
+
+// Each window loads only its own code: the island never needs the settings
+// pages, and the settings and capture windows never need the island.
+const Island = lazy(() => import("./island/Island").then((m) => ({ default: m.Island })));
+const CaptureOverlay = lazy(() => import("./capture/CaptureOverlay").then((m) => ({ default: m.CaptureOverlay })));
+const SettingsWindow = lazy(() => import("./settings/SettingsWindow").then((m) => ({ default: m.SettingsWindow })));
 
 /**
  * One frontend, three windows: the island, the screen-capture overlay and the
@@ -12,5 +16,9 @@ import "./theme.css";
 const label = isTauri ? getCurrentWindow().label : new URLSearchParams(location.search).has("settings") ? "settings" : "main";
 
 export default function App() {
-  return label === "capture" ? <CaptureOverlay /> : label === "settings" ? <SettingsWindow /> : <Island />;
+  return (
+    <Suspense fallback={null}>
+      {label === "capture" ? <CaptureOverlay /> : label === "settings" ? <SettingsWindow /> : <Island />}
+    </Suspense>
+  );
 }

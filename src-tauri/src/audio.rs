@@ -24,6 +24,8 @@ use rustfft::{FftPlanner, num_complex::Complex};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::overlay;
+
 const FFT_SIZE: usize = 2048;
 const FRAME: Duration = Duration::from_millis(16);
 /// Kick detection window, seconds.
@@ -67,6 +69,8 @@ struct Buffers {
     mono: VecDeque<f32>,
     /// Low-passed mono mix for kick detection.
     bass: VecDeque<f32>,
+    /// Bumped on every delivery, so the analyser can tell new audio from old.
+    writes: u64,
 }
 
 /// Two cascaded one-pole low-pass filters (12 dB/oct).
@@ -165,6 +169,7 @@ fn run_capture(app: &AppHandle) -> Result<(), String> {
                 }
                 trim(&mut buf.mono, FFT_SIZE);
                 trim(&mut buf.bass, kick_len);
+                buf.writes = buf.writes.wrapping_add(1);
             },
             move |e: cpal::Error| {
                 use cpal::ErrorKind::*;
@@ -185,6 +190,9 @@ fn run_capture(app: &AppHandle) -> Result<(), String> {
     let mut analyser = Analyser::new(sample_rate);
     let mut last_check = Instant::now();
     let mut was_silent = false;
+    // Reused every frame rather than allocated anew.
+    let mut window = Vec::with_capacity(FFT_SIZE);
+    let mut last_writes = None;
 
     loop {
         thread::sleep(FRAME);
@@ -200,13 +208,27 @@ fn run_capture(app: &AppHandle) -> Result<(), String> {
             }
         }
 
-        let (window, kick_rms) = {
+        let (fresh, kick_rms) = {
             let buf = buffers.lock().unwrap();
             let n = buf.bass.len().max(1) as f32;
             let rms = (buf.bass.iter().map(|x| x * x).sum::<f32>() / n).sqrt();
-            (buf.mono.iter().copied().collect::<Vec<f32>>(), rms)
+            // Nothing new arrived (players that stop sending on pause): the
+            // window is the one analysed last frame.
+            let fresh = last_writes != Some(buf.writes);
+            if fresh {
+                last_writes = Some(buf.writes);
+                window.clear();
+                window.extend(buf.mono.iter().copied());
+            }
+            (fresh, rms)
         };
-        let levels = analyser.process(&window, kick_rms);
+        let levels = analyser.process(&window, fresh, kick_rms);
+        // Nobody sees the levels while the island is hidden behind a
+        // fullscreen app; the first frame back is always sent.
+        if overlay::hidden() {
+            was_silent = false;
+            continue;
+        }
         let silent = levels.beat < 0.01 && levels.bands.iter().all(|&b| b < 0.01);
         // Stream while there's sound, plus one final zero frame on going quiet.
         if !(silent && was_silent) {
@@ -223,6 +245,11 @@ fn trim(buf: &mut VecDeque<f32>, len: usize) {
 
 struct Analyser {
     fft: Arc<dyn rustfft::Fft<f32>>,
+    /// FFT buffer and its scratch space, kept between frames.
+    spectrum: Vec<Complex<f32>>,
+    scratch: Vec<Complex<f32>>,
+    /// Band magnitudes of the last window, reused while the audio stands still.
+    raw: [f32; 4],
     hann: Vec<f32>,
     bins: [(usize, usize); 4],
     /// Slowly decaying per-band peaks used as automatic gain.
@@ -241,8 +268,13 @@ impl Analyser {
             let hi = ((hi / hz_per_bin).ceil() as usize).clamp(lo + 1, FFT_SIZE / 2);
             (lo, hi)
         });
+        let fft = FftPlanner::new().plan_fft_forward(FFT_SIZE);
+        let zero = Complex::new(0.0, 0.0);
         Self {
-            fft: FftPlanner::new().plan_fft_forward(FFT_SIZE),
+            spectrum: vec![zero; FFT_SIZE],
+            scratch: vec![zero; fft.get_inplace_scratch_len()],
+            raw: [0.0; 4],
+            fft,
             hann: (0..FFT_SIZE)
                 .map(|i| 0.5 - 0.5 * (2.0 * PI * i as f32 / (FFT_SIZE - 1) as f32).cos())
                 .collect(),
@@ -254,19 +286,17 @@ impl Analyser {
         }
     }
 
-    fn process(&mut self, samples: &[f32], kick_rms: f32) -> Levels {
-        let mut spectrum = vec![Complex::new(0.0, 0.0); FFT_SIZE];
-        let offset = FFT_SIZE - samples.len().min(FFT_SIZE);
-        for (i, &s) in samples.iter().take(FFT_SIZE).enumerate() {
-            spectrum[offset + i].re = s * self.hann[offset + i];
+    /// `fresh`: whether `samples` changed since the last call; the FFT of the
+    /// same window is skipped, and so is the FFT of pure silence (all zero).
+    fn process(&mut self, samples: &[f32], fresh: bool, kick_rms: f32) -> Levels {
+        if fresh {
+            self.raw = if samples.iter().all(|&s| s == 0.0) {
+                [0.0; 4]
+            } else {
+                self.band_magnitudes(samples)
+            };
         }
-        self.fft.process(&mut spectrum);
-
-        let mut raw = [0.0f32; 4];
-        for (band, &(lo, hi)) in self.bins.iter().enumerate() {
-            let sum: f32 = spectrum[lo..hi].iter().map(|c| c.norm()).sum();
-            raw[band] = sum / (hi - lo) as f32 / FFT_SIZE as f32 * 4.0 * TILT[band];
-        }
+        let raw = self.raw;
 
         for band in 0..4 {
             // Auto-gain: peaks jump up instantly and sink back over ~5 s.
@@ -303,6 +333,23 @@ impl Analyser {
             beat: round(self.beat),
             bands: self.bands.map(round),
         }
+    }
+
+    fn band_magnitudes(&mut self, samples: &[f32]) -> [f32; 4] {
+        let spectrum = &mut self.spectrum;
+        spectrum.fill(Complex::new(0.0, 0.0));
+        let offset = FFT_SIZE - samples.len().min(FFT_SIZE);
+        for (i, &s) in samples.iter().take(FFT_SIZE).enumerate() {
+            spectrum[offset + i].re = s * self.hann[offset + i];
+        }
+        self.fft.process_with_scratch(spectrum, &mut self.scratch);
+
+        let mut raw = [0.0f32; 4];
+        for (band, &(lo, hi)) in self.bins.iter().enumerate() {
+            let sum: f32 = spectrum[lo..hi].iter().map(|c| c.norm()).sum();
+            raw[band] = sum / (hi - lo) as f32 / FFT_SIZE as f32 * 4.0 * TILT[band];
+        }
+        raw
     }
 }
 
