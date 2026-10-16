@@ -44,7 +44,7 @@ export function IslandSection({ settings }: { settings: Settings }) {
       <Heading>Форма</Heading>
       <div className="st-card">
         <Row title="Ширина в покое">
-          <Slider value={island.width} min={160} max={340} step={4} format={px} onChange={(width) => shape({ width })} />
+          <Slider value={island.width} min={120} max={340} step={4} format={px} onChange={(width) => shape({ width })} />
         </Row>
         <Row title="Высота в покое">
           <Slider value={island.height} min={30} max={52} format={px} onChange={(height) => shape({ height })} />
@@ -99,6 +99,16 @@ export function IslandSection({ settings }: { settings: Settings }) {
             onChange={(hideFullscreen) => updateSettings({ display: { hideFullscreen } })}
           />
         </Row>
+        <Row title="FPS и нагрузка в играх" hint="Когда запускается игра, остров выезжает на пару секунд с FPS, CPU, GPU и памятью и уезжает обратно">
+          <span className="st-colors">
+            {settings.games.stats && isTauri && (
+              <button className="st-button quiet" onClick={() => invoke("games_preview")}>
+                Показать
+              </button>
+            )}
+            <Toggle on={settings.games.stats} onChange={(stats) => updateSettings({ games: { stats } })} />
+          </span>
+        </Row>
         <Row title="Прятать при развёрнутых окнах" hint="Когда активное окно развёрнуто на весь экран">
           <Toggle
             on={display.hideMaximized}
@@ -147,6 +157,9 @@ export function IslandSection({ settings }: { settings: Settings }) {
 
       <Heading>В покое</Heading>
       <div className="st-card">
+        <Row title="Точка" hint="Светящаяся точка слева, без неё часы по центру">
+          <Toggle on={collapsed.dot} onChange={(dot) => rest({ dot })} />
+        </Row>
         <Row title="24-часовой формат">
           <Toggle on={collapsed.clock24} onChange={(clock24) => rest({ clock24 })} />
         </Row>

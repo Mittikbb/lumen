@@ -40,6 +40,8 @@ import { DownloadView } from "../downloads/DownloadView";
 import { useBluetoothEvents, useKeyboardEvents } from "../devices/useDeviceEvents";
 import { KeyboardDrop, keyboardWidth } from "../devices/KeyboardDrop";
 import { BluetoothView } from "../devices/BluetoothView";
+import { useGame } from "../games/useGame";
+import { GameView } from "../games/GameView";
 import type { MotionPrefs } from "../settings/useSettings";
 
 /** The night screen's width, and its height against the usual one. */
@@ -47,6 +49,8 @@ const NIGHT_WIDTH = 262;
 const NIGHT_HEIGHT = 1.55;
 /** Collapsed island while showing a short notice, e.g. "added to shelf". */
 const NOTICE_WIDTH = 290;
+/** A starting game with its FPS and load. */
+const GAME_WIDTH = 390;
 const NOTICE_MS = 2600;
 const WEATHER_NOTICE_MS = 6000;
 const COPY_NOTICE_MS = 1800;
@@ -159,6 +163,7 @@ export function Island() {
   const miniCall = !!voice && showsTab("call") && prefs.call.style !== "drop";
   // Downloads from the Downloads folder, when switched on in the settings.
   const downloads = useDownloads();
+  const game = useGame();
   const downloading = prefs.downloads.enabled && (downloads.active.length > 0 || !!downloads.done);
   // Bluetooth devices coming and going, shown in the collapsed island.
   const bluetooth = useBluetoothEvents(() => notices.bluetooth);
@@ -204,14 +209,16 @@ export function Island() {
   // something else has the island (a notice, a call, music playing).
   const night = useNight(prefs.night);
   const showsTrack = !!media && rest.track && (media.playing || !night);
-  const nightShown = night && !notice && !bluetooth && !downloading && !miniCall && !showsTrack;
+  const nightShown = night && !game && !notice && !bluetooth && !downloading && !miniCall && !showsTrack;
   // Rain or snow inside the capsule while it falls outside.
   const forecast = weatherCity ? weather.forecast : null;
   const fx = rest.weatherFx && !moves.reduced && forecast ? precipitation(forecast.code) : null;
 
   // Collapsed size: wider for a notice or a call shown inside the island.
   const collapsedSize = {
-    width: notice || bluetooth || downloading
+    width: game
+      ? Math.max(GAME_WIDTH, shape.width)
+      : notice || bluetooth || downloading
       ? Math.max(NOTICE_WIDTH, shape.width + 70)
       : miniCall
         ? Math.max(shape.width, 250)
@@ -455,6 +462,7 @@ export function Island() {
     : { paddingTop: shape.offsetTop };
 
   const flow = look?.style === "flow";
+  const finish = look?.finish && look.finish !== "solid" ? ` ${look.finish}` : "";
   const glow = `${flow ? " flow" : ""}${media?.playing ? " is-playing" : ""}${reactive ? " reactive" : ""}${moves.reduced ? " reduced" : ""}`;
   // A twin that moves exactly like the island, `inset` px smaller all round.
   const twin = (inset: number) => ({
@@ -481,7 +489,7 @@ export function Island() {
 
   return (
     <motion.div
-      className={`stage${flow ? " flow" : ""}`}
+      className={`stage${flow ? " flow" : ""}${finish}`}
       style={{ ...stage, transformOrigin: `${center}px ${top}px` }}
       initial={away}
       animate={visible ? here : away}
@@ -673,7 +681,9 @@ export function Island() {
               animate={{ opacity: 1, transition: { delay: 0.1 } }}
               exit={{ opacity: 0, transition: { duration: 0.08 } }}
             >
-              {notice ? (
+              {game ? (
+                <GameView game={game} />
+              ) : notice ? (
                 <motion.div
                   key="notice"
                   className="notice"
@@ -733,8 +743,8 @@ export function Island() {
                 />
               ) : (
                 <>
-                  <span className="orb" />
-                  <span className="collapsed-right">
+                  {rest.dot && <span className="orb" />}
+                  <span className={`collapsed-right${rest.dot ? "" : " centered"}`}>
                     {rest.weather && weatherCity && weather.forecast && (
                       <span className="mini-weather">
                         <WeatherIcon sky={condition(weather.forecast.code).sky} day={weather.forecast.day} />

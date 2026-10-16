@@ -5,6 +5,7 @@ mod capture;
 mod clipboard;
 mod discord;
 mod downloads;
+mod games;
 mod hotkeys;
 mod keyboard;
 mod launcher;
@@ -105,6 +106,7 @@ pub fn run() {
             hotkeys::hotkeys_suspend,
             hotkeys::hotkeys_busy,
             downloads::downloads_reveal,
+            games::games_preview,
         ])
         .setup(|app| {
             let window = app

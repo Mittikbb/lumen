@@ -47,9 +47,18 @@ pub struct Settings {
     pub updates: UpdatePrefs,
     pub players: PlayerPrefs,
     pub downloads: DownloadPrefs,
+    pub games: GamePrefs,
     /// Frontend-only groups, kept untouched.
     #[serde(flatten)]
     pub rest: Map<String, Value>,
+}
+
+/// A game taking the screen: the island pops out with its FPS and the PC's
+/// load for a few seconds (games.rs); off until switched on.
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GamePrefs {
+    pub stats: bool,
 }
 
 /// Downloads shown on the island; off until switched on.

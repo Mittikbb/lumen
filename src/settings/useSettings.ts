@@ -26,12 +26,15 @@ export interface Hotkeys {
 
 /** "glow" breathes around the capsule; "flow" ("Перелив") runs its colours sideways along it. */
 export type GlowStyle = "glow" | "flow";
+/** The capsule itself: the usual dark body, see-through "smoke", or a "neon" ring in the glow colours. */
+export type Finish = "solid" | "smoke" | "neon";
 /** How fast the glow breathes or flows. */
 export type GlowPace = "slow" | "normal" | "fast";
 
 export interface Look {
   glow: GlowLevel;
   style: GlowStyle;
+  finish: Finish;
   /** How far the glow reaches, on top of its strength (1 = as is). */
   spread: number;
   pace: GlowPace;
@@ -95,6 +98,8 @@ export type Visualizer = "bars" | "scope" | "particles";
 
 /** What the collapsed island shows at rest. */
 export interface CollapsedPrefs {
+  /** The glowing dot on the left; without it the clock sits in the middle. */
+  dot: boolean;
   clock24: boolean;
   seconds: boolean;
   date: boolean;
@@ -240,6 +245,8 @@ export interface Settings {
   players: PlayerPrefs;
   /** Show downloads on the island; off by default. */
   downloads: { enabled: boolean };
+  /** `stats`: a starting game pops the island out with its FPS and the PC's load; off by default. */
+  games: { stats: boolean };
   advanced: AdvancedPrefs;
 }
 
@@ -264,6 +271,7 @@ export const DEFAULT_SETTINGS: Settings = {
   look: {
     glow: "normal",
     style: "glow",
+    finish: "solid",
     spread: 1,
     pace: "normal",
     musicOnly: false,
@@ -285,7 +293,7 @@ export const DEFAULT_SETTINGS: Settings = {
     closeDelay: 380,
     pull: 1,
   },
-  collapsed: { clock24: true, seconds: false, date: false, weather: true, track: true, viz: "bars", sparks: false, weatherFx: true },
+  collapsed: { dot: true, clock24: true, seconds: false, date: false, weather: true, track: true, viz: "bars", sparks: false, weatherFx: true },
   night: { mode: "off", from: 22, to: 7 },
   call: {
     style: "classic",
@@ -308,6 +316,7 @@ export const DEFAULT_SETTINGS: Settings = {
   media: { volumeSlider: true },
   players: { known: [], hidden: [], names: {} },
   downloads: { enabled: false },
+  games: { stats: false },
   advanced: {
     unlocked: false,
     lookup: false,

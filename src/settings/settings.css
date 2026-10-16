@@ -759,22 +759,13 @@ html.settings-root #root {
   transition: border-color 0.15s, background 0.15s;
 }
 
-.st-preset:hover:not(:disabled) {
+.st-preset:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
 .st-preset[aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--glow-a) 70%, transparent);
   background: color-mix(in srgb, var(--glow-a) 8%, transparent);
-}
-
-.st-preset:disabled {
-  cursor: default;
-}
-
-.st-preset:disabled .st-preset-preview,
-.st-preset:disabled .st-preset-text {
-  opacity: 0.6;
 }
 
 .st-preset-preview {
@@ -786,68 +777,22 @@ html.settings-root #root {
   background: #050507;
 }
 
+/* Дымка needs something behind it to show through. */
+.st-preset-preview.smoke,
+.st-preview.smoke {
+  background:
+    radial-gradient(ellipse at 30% 0%, rgba(124, 196, 255, 0.16), transparent 65%),
+    radial-gradient(ellipse at 75% 100%, rgba(226, 86, 160, 0.14), transparent 60%),
+    #07070a;
+}
+
+/* Size and glow come from the preset itself (presetPreview). */
 .st-preset-preview i {
-  width: 74px;
-  height: 18px;
-  border-radius: 9px;
   background: var(--island-bg);
 }
 
-.st-preset-preview.glow i {
-  box-shadow:
-    0 0 0 1px rgba(247, 178, 103, 0.3),
-    0 0 12px 2px rgba(242, 92, 84, 0.55);
-}
-
-.st-preset-preview.flow i {
-  box-shadow:
-    -9px 0 12px 1px rgba(247, 178, 103, 0.55),
-    9px 0 12px 1px rgba(242, 92, 84, 0.6);
-}
-
-.st-preset-preview.minimal i {
-  width: 56px;
-  height: 14px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-
-.st-preset-preview.glass {
-  background: linear-gradient(135deg, #2b3b5c, #4a2f4f);
-}
-
-.st-preset-preview.glass i {
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
-}
-
-.st-preset-preview.neon i {
-  box-shadow:
-    0 0 0 1.5px #ff3cac,
-    0 0 10px 1px #ff3cac,
-    0 0 18px 4px rgba(120, 75, 255, 0.6);
-}
-
-.st-preset-preview.gaming i {
-  width: 60px;
-  border-radius: 4px;
-  box-shadow: 0 0 0 1px rgba(80, 255, 140, 0.55);
-}
-
 .st-preset-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   font-weight: 600;
-}
-
-.st-preset-name em {
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 500;
-  color: var(--island-fg-muted);
-  background: rgba(255, 255, 255, 0.08);
 }
 
 .st-preset-text {

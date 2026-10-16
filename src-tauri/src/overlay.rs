@@ -19,12 +19,12 @@ use windows::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
     UI::WindowsAndMessaging::{
-        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsZoomed,
+        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsZoomed,
         SetForegroundWindow,
     },
 };
 
-use crate::settings;
+use crate::{games, settings};
 
 /// Bounds in CSS pixels relative to the window, reported by the frontend.
 #[derive(Clone, Copy, Default, Deserialize)]
@@ -382,6 +382,9 @@ const HIDE_ANIMATION: Duration = Duration::from_millis(320);
 pub fn spawn_fullscreen_watch(app: AppHandle) {
     thread::spawn(move || {
         let mut hidden = false;
+        // Processes already greeted as games (or found not to be), so a game
+        // pops the island out once, when it starts, not on every Alt+Tab back.
+        let mut greeted = std::collections::HashSet::new();
         loop {
             thread::sleep(Duration::from_millis(500));
             let Some(window) = app.get_webview_window("main") else {
@@ -390,12 +393,20 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
             let Ok(hwnd) = window.hwnd() else {
                 continue;
             };
-            let display = settings::get(&app).display;
-            let hide = (display.hide_fullscreen || display.hide_maximized) && {
-                let cover = cover_in_front(HWND(hwnd.0));
-                (display.hide_fullscreen && cover.fullscreen)
-                    || (display.hide_maximized && cover.maximized)
+            let settings = settings::get(&app);
+            let display = settings.display;
+            let cover = if display.hide_fullscreen || display.hide_maximized || settings.games.stats {
+                cover_in_front(HWND(hwnd.0))
+            } else {
+                Cover::default()
             };
+            if settings.games.stats && cover.fullscreen && !hidden && greeted.insert(cover.pid) {
+                if let Some(name) = games::game_name(cover.pid, &cover.title) {
+                    games::show(&app, cover.pid, name);
+                }
+            }
+            let hide = (display.hide_fullscreen && cover.fullscreen)
+                || (display.hide_maximized && cover.maximized);
             if hide != hidden {
                 // The island flies off before the window goes, and the window
                 // is back before the island springs in (see Island.tsx).
@@ -420,6 +431,9 @@ struct Cover {
     fullscreen: bool,
     /// Maximized, or fills the work area.
     maximized: bool,
+    /// The app in front and its window title.
+    pid: u32,
+    title: String,
 }
 
 fn cover_in_front(island: HWND) -> Cover {
@@ -468,9 +482,13 @@ fn cover_in_front(island: HWND) -> Cover {
                 && rect.right >= area.right
                 && rect.bottom >= area.bottom
         };
+        let mut title = [0u16; 256];
+        let len = GetWindowTextW(front, &mut title).max(0) as usize;
         Cover {
             fullscreen: covers(info.rcMonitor),
             maximized: IsZoomed(front).as_bool() || covers(info.rcWork),
+            pid,
+            title: String::from_utf16_lossy(&title[..len]),
         }
     }
 }

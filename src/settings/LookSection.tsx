@@ -1,8 +1,8 @@
 import { useClock } from "../island/useClock";
 import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
 import { ACCENTS, GLOW_LEVELS, GLOW_PACES, palette } from "./look";
-import { isActive, PRESETS } from "./presets";
-import { Accent, Bounce, GlowLevel, GlowPace, GlowStyle, Look, MotionPrefs, Settings, Speed, updateSettings } from "./useSettings";
+import { isActive, presetPreview, PRESETS } from "./presets";
+import { Accent, Bounce, Finish, GlowLevel, GlowPace, GlowStyle, Look, MotionPrefs, Settings, Speed, updateSettings } from "./useSettings";
 
 const SPEEDS: { value: Speed; label: string }[] = [
   { value: "slow", label: "Медленно" },
@@ -13,6 +13,12 @@ const SPEEDS: { value: Speed; label: string }[] = [
 const STYLES: { value: GlowStyle; label: string }[] = [
   { value: "glow", label: "Свечение" },
   { value: "flow", label: "Перелив" },
+];
+
+const FINISHES: { value: Finish; label: string }[] = [
+  { value: "solid", label: "Плотная" },
+  { value: "smoke", label: "Дымка" },
+  { value: "neon", label: "Неон" },
 ];
 
 const PACES = (Object.keys(GLOW_PACES) as GlowPace[]).map((value) => ({ value, label: GLOW_PACES[value].label }));
@@ -35,31 +41,32 @@ export function LookSection({ settings }: { settings: Settings }) {
     <>
       <Heading>Пресеты</Heading>
       <div className="st-presets">
-        {PRESETS.map((p) => (
-          <button
-            key={p.id}
-            className="st-preset"
-            aria-pressed={isActive(p, settings)}
-            disabled={!p.patch}
-            onClick={() => p.patch && updateSettings(p.patch)}
-          >
-            <span className={`st-preset-preview ${p.preview}`}>
-              <i />
-            </span>
-            <span className="st-preset-name">
-              {p.name}
-              {!p.patch && <em>скоро</em>}
-            </span>
-            <span className="st-preset-text">{p.description}</span>
-          </button>
-        ))}
+        {PRESETS.map((p) => {
+          const { backdrop, capsule } = presetPreview(p);
+          return (
+            <button
+              key={p.id}
+              className="st-preset"
+              aria-pressed={isActive(p, settings)}
+              onClick={() => updateSettings(p.patch)}
+            >
+              <span className={`st-preset-preview ${backdrop}`}>
+                <i style={capsule} />
+              </span>
+              <span className="st-preset-name">{p.name}</span>
+              <span className="st-preset-text">{p.description}</span>
+            </button>
+          );
+        })}
       </div>
 
       <Heading>Свечение</Heading>
-      <div className="st-preview">
+      <div className={`st-preview ${look.finish}`}>
         <div className={`island st-preview-island${look.style === "flow" ? " flow" : ""}${motion.reduced ? " reduced" : ""}`}>
-          <span className="orb" />
-          <span className="clock">{time}</span>
+          {settings.collapsed.dot && <span className="orb" />}
+          <span className="clock" style={settings.collapsed.dot ? undefined : { margin: "0 auto" }}>
+            {time}
+          </span>
         </div>
       </div>
 
@@ -73,6 +80,9 @@ export function LookSection({ settings }: { settings: Settings }) {
         </Row>
         <Row title="Стиль" hint="Перелив — цвета бегут вдоль капсулы">
           <Segmented value={look.style} options={STYLES} onChange={(style) => set({ style })} />
+        </Row>
+        <Row title="Капсула" hint="Дымка — полупрозрачная, неон — светящийся контур">
+          <Segmented value={look.finish} options={FINISHES} onChange={(finish) => set({ finish })} />
         </Row>
         <Row title="Размер" hint="Как далеко расходится ореол">
           <Slider value={look.spread} min={0.5} max={1.8} step={0.1} format={times} onChange={(spread) => set({ spread })} />
