@@ -92,7 +92,7 @@ export function ModulesSection({ settings }: { settings: Settings }) {
       <Heading>Погода</Heading>
       <WeatherSettings settings={settings} />
 
-      {/* No "now playing" on macOS yet. */}
+      {/* No per-player volume on macOS yet. */}
       {!isMac && (
         <>
           <Heading>Медиа</Heading>
@@ -104,11 +104,11 @@ export function ModulesSection({ settings }: { settings: Settings }) {
               />
             </Row>
           </div>
-
-          <Heading>Плееры</Heading>
-          <Players players={settings.players} />
         </>
       )}
+
+      <Heading>Плееры</Heading>
+      <Players players={settings.players} />
 
       <Heading>Загрузки</Heading>
       <div className="st-card">

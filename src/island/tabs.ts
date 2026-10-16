@@ -15,8 +15,8 @@ export const TABS = [
 
 export type TabId = (typeof TABS)[number]["id"];
 
-/** Tabs whose backend isn't there on macOS yet: Discord calls and now playing. */
-const MAC_MISSING: TabId[] = ["call", "media"];
+/** Tabs whose backend isn't there on macOS yet: Discord calls. */
+const MAC_MISSING: TabId[] = ["call"];
 
 /** The tabs this platform has, in order. */
 export const PLATFORM_TABS = TABS.filter((t) => !(isMac && MAC_MISSING.includes(t.id)));

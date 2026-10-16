@@ -79,8 +79,8 @@ const HOTKEY_GROUPS: { title: string; rows: HotkeyRowSpec[] }[] = [
 
 const HOTKEY_ROWS = HOTKEY_GROUPS.flatMap((g) => g.rows);
 
-/** Actions with no backend on macOS yet: text from the screen, Discord, music. */
-const MAC_MISSING_HOTKEYS: (keyof Hotkeys)[] = ["text", "mic", "play", "next", "previous"];
+/** Actions with no backend on macOS yet: text from the screen and Discord. */
+const MAC_MISSING_HOTKEYS: (keyof Hotkeys)[] = ["text", "mic"];
 const PLATFORM_HOTKEY_GROUPS = HOTKEY_GROUPS.map((g) => ({
   ...g,
   rows: g.rows.filter((r) => !(isMac && MAC_MISSING_HOTKEYS.includes(r.id))),

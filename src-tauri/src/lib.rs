@@ -137,11 +137,10 @@ pub fn run() {
             overlay::dock_to_top(&window)?;
             overlay::spawn_cursor_tracker(app.handle().clone());
             #[cfg(windows)]
-            {
-                overlay::spawn_fullscreen_watch(app.handle().clone());
-                media::spawn_watcher(app.handle().clone());
-                audio::spawn_analyser(app.handle().clone());
-            }
+            overlay::spawn_fullscreen_watch(app.handle().clone());
+            media::spawn_watcher(app.handle().clone());
+            #[cfg(windows)]
+            audio::spawn_analyser(app.handle().clone());
             clipboard::spawn_watcher(app.handle().clone());
             launcher::init(app.handle());
             hotkeys::init(app.handle())?;
