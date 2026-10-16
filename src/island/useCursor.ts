@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "./env";
 
@@ -9,18 +9,23 @@ export interface Cursor {
   inside: boolean;
 }
 
-export function useCursor(): Cursor | null {
-  const [cursor, setCursor] = useState<Cursor | null>(null);
+/**
+ * Calls `onCursor` with every cursor update (~60 a second while the pointer
+ * is near the island), outside React state, so following the pointer
+ * doesn't re-render anything by itself.
+ */
+export function useCursorListener(onCursor: (cursor: Cursor) => void) {
+  const handler = useRef(onCursor);
+  handler.current = onCursor;
 
   useEffect(() => {
-    if (!isTauri) return browserCursor(setCursor);
-    const unlisten = listen<Cursor>("lumen://cursor", (e) => setCursor(e.payload));
+    const call = (cursor: Cursor) => handler.current(cursor);
+    if (!isTauri) return browserCursor(call);
+    const unlisten = listen<Cursor>("lumen://cursor", (e) => call(e.payload));
     return () => {
       unlisten.then((off) => off());
     };
   }, []);
-
-  return cursor;
 }
 
 /** Browser preview: derive the same events from mousemove. */

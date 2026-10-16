@@ -46,7 +46,7 @@ pub fn spawn_watcher(app: AppHandle) {
         // devices already there at start aren't announced.
         let mut known: Option<HashMap<String, (String, &'static str)>> = None;
         loop {
-            if let Ok(now) = connected() {
+            if let Ok(now) = connected(known.as_ref()) {
                 if let Some(before) = &known {
                     for (name, (_, kind)) in now.iter().filter(|(n, _)| !before.contains_key(*n)) {
                         let battery = battery_of(name);
@@ -68,20 +68,30 @@ fn event(connected: bool, name: &str, kind: &'static str, battery: Option<u8>) -
 }
 
 /// Connected devices by name (classic and Low Energy; a device that speaks
-/// both shows up once), with their id and kind.
-fn connected() -> windows::core::Result<HashMap<String, (String, &'static str)>> {
+/// both shows up once), with their id and kind. Kinds of devices already in
+/// `before` are kept rather than asked for again.
+fn connected(
+    before: Option<&HashMap<String, (String, &'static str)>>,
+) -> windows::core::Result<HashMap<String, (String, &'static str)>> {
     let mut found = HashMap::new();
     let classic = BluetoothDevice::GetDeviceSelectorFromConnectionStatus(BluetoothConnectionStatus::Connected)?;
     for info in DeviceInformation::FindAllAsyncAqsFilter(&classic)?.join()? {
         let name = info.Name()?.to_string();
-        let id = info.Id()?;
-        let kind = BluetoothDevice::FromIdAsync(&id)
-            .and_then(|op| op.join())
-            .map(|device| kind_of(&device))
-            .unwrap_or("device");
-        if !name.is_empty() {
-            found.insert(name, (id.to_string(), kind));
+        if name.is_empty() {
+            continue;
         }
+        let id = info.Id()?.to_string();
+        let known = before
+            .and_then(|b| b.get(&name))
+            .filter(|(was, _)| *was == id)
+            .map(|&(_, kind)| kind);
+        let kind = known.unwrap_or_else(|| {
+            BluetoothDevice::FromIdAsync(&id.as_str().into())
+                .and_then(|op| op.join())
+                .map(|device| kind_of(&device))
+                .unwrap_or("device")
+        });
+        found.insert(name, (id, kind));
     }
     let low_energy = BluetoothLEDevice::GetDeviceSelectorFromConnectionStatus(BluetoothConnectionStatus::Connected)?;
     for info in DeviceInformation::FindAllAsyncAqsFilter(&low_energy)?.join()? {
