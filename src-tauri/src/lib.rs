@@ -19,6 +19,7 @@ mod hotkeys;
 #[cfg_attr(target_os = "macos", path = "macos/keyboard.rs")]
 mod keyboard;
 mod launcher;
+mod lookup;
 #[cfg_attr(target_os = "macos", path = "macos/media.rs")]
 mod media;
 mod net;
@@ -68,6 +69,7 @@ pub fn run() {
         .manage(updates::Updates::default())
         .manage(downloads::Downloads::default())
         .manage(addons::Addons::default())
+        .manage(lookup::Lookup::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
@@ -125,6 +127,8 @@ pub fn run() {
             hotkeys::hotkeys_busy,
             downloads::downloads_reveal,
             games::games_preview,
+            lookup::lookup_cached,
+            lookup::lookup_refresh,
             addons::addons_list,
             addons::addons_open_folder,
             addons::addons_storage_get,
@@ -161,6 +165,7 @@ pub fn run() {
             keyboard::spawn_watcher(app.handle().clone());
             bluetooth::spawn_watcher(app.handle().clone());
             addons::init(app.handle());
+            lookup::init(app.handle());
 
             Ok(())
         })
