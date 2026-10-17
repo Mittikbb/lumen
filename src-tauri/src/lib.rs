@@ -69,6 +69,7 @@ pub fn run() {
         .manage(updates::Updates::default())
         .manage(downloads::Downloads::default())
         .manage(addons::Addons::default())
+        .manage(lookup::Lookup::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
@@ -164,6 +165,7 @@ pub fn run() {
             keyboard::spawn_watcher(app.handle().clone());
             bluetooth::spawn_watcher(app.handle().clone());
             addons::init(app.handle());
+            lookup::init(app.handle());
 
             Ok(())
         })

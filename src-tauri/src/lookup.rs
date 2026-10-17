@@ -1,18 +1,18 @@
 //! Data for the "h:" search, from the lackyhy/Protocol-list repository: its
 //! lumen.json (HTTP codes and protocols, rebuilt there on every push) is
-//! downloaded through the system proxy and kept in the app data folder, so
-//! edits to the repository reach Lumen without a new release. Until the first
-//! download, and without a network, the frontend's built-in list is used.
+//! downloaded through the system proxy, so edits to the repository reach
+//! Lumen without a new release. Nothing is written to disk: the last copy
+//! lives in memory until Lumen quits, and until the first download (or
+//! without a network) the frontend's built-in list is used.
 
 use std::{
-    fs,
     io::Read,
-    path::PathBuf,
+    sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde_json::{Value, json};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::net;
 
@@ -24,19 +24,25 @@ const SOURCES: [&str; 2] = [
 ];
 const LIMIT: u64 = 2 * 1024 * 1024;
 
-fn cache_file(app: &AppHandle) -> Option<PathBuf> {
-    Some(app.path().app_data_dir().ok()?.join("protocol-list.json"))
+/// The last download: `{ fetchedAt, index }`.
+#[derive(Default)]
+pub struct Lookup(Mutex<Option<Value>>);
+
+/// Drops the file earlier builds kept the list in.
+pub fn init(app: &AppHandle) {
+    if let Ok(dir) = app.path().app_data_dir() {
+        let _ = std::fs::remove_file(dir.join("protocol-list.json"));
+    }
 }
 
-/// The last download: `{ fetchedAt, index }`, or `None` before the first.
+/// The copy downloaded since Lumen started, or `None`.
 #[tauri::command]
-pub fn lookup_cached(app: AppHandle) -> Option<Value> {
-    let text = fs::read_to_string(cache_file(&app)?).ok()?;
-    serde_json::from_str(&text).ok()
+pub fn lookup_cached(lookup: State<Lookup>) -> Option<Value> {
+    lookup.0.lock().unwrap().clone()
 }
 
-/// Downloads lumen.json again, saves it and tells every window
-/// (`lumen://lookup`); returns what it saved.
+/// Downloads lumen.json again, keeps it in memory and tells every window
+/// (`lumen://lookup`); returns it.
 #[tauri::command]
 pub async fn lookup_refresh(app: AppHandle) -> Result<Value, String> {
     let index = tauri::async_runtime::spawn_blocking(download)
@@ -45,12 +51,10 @@ pub async fn lookup_refresh(app: AppHandle) -> Result<Value, String> {
     let fetched_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64);
-    let cached = json!({ "fetchedAt": fetched_at, "index": index });
-    if let Some(path) = cache_file(&app) {
-        let _ = fs::write(path, cached.to_string());
-    }
-    let _ = app.emit("lumen://lookup", &cached);
-    Ok(cached)
+    let copy = json!({ "fetchedAt": fetched_at, "index": index });
+    *app.state::<Lookup>().0.lock().unwrap() = Some(copy.clone());
+    let _ = app.emit("lumen://lookup", &copy);
+    Ok(copy)
 }
 
 fn download() -> Result<Value, String> {

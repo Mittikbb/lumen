@@ -4,14 +4,14 @@ import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../island/env";
 import { applyIndex } from "./httpCodes";
 
-/** lumen.json as the backend keeps it. */
+/** lumen.json as the backend keeps it, in memory only. */
 export interface LookupCache {
   /** When it was downloaded, ms since 1970. */
   fetchedAt: number;
   index: unknown;
 }
 
-/** A downloaded copy older than this is fetched again when search opens. */
+/** A copy older than this is fetched again when search opens. */
 const STALE_MS = 60 * 60 * 1000;
 
 let fetchedAt = 0;
@@ -34,7 +34,8 @@ export function refreshLookup(): Promise<LookupCache> {
 
 let started = false;
 
-/** The saved copy first, then a fresh one if it's old; and every later download. */
+/** The copy the backend already has (after an island reload), a fresh one if
+ * there's none or it's old, and every later download. */
 function start() {
   if (started || !isTauri) return;
   started = true;

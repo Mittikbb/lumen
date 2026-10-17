@@ -117,7 +117,7 @@ export function AdvancedSection({ settings }: { settings: Settings }) {
   );
 }
 
-/** When the list was last downloaded from the repository, and a button to do it now. */
+/** When the list was last downloaded from the repository (it's kept in memory only), and a button to do it now. */
 function LookupStatus() {
   const [cache, setCache] = useState<LookupCache | null>(null);
   const [busy, setBusy] = useState(false);
@@ -150,9 +150,9 @@ function LookupStatus() {
         error ? (
           <span className="st-error">Не удалось скачать: {error}</span>
         ) : cache ? (
-          `Обновлено ${when} · ${index.http?.length ?? 0} кодов, ${index.protocols?.length ?? 0} протоколов. Lumen сам проверяет раз в час`
+          `Загружено с GitHub ${when} · ${index.http?.length ?? 0} кодов, ${index.protocols?.length ?? 0} протоколов. Не сохраняется на диск, Lumen проверяет раз в час`
         ) : (
-          "Ещё не скачаны — пока работает встроенный список"
+          "Ещё не загружены — пока работает встроенный список"
         )
       }
     >
