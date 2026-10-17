@@ -1,7 +1,6 @@
 // Modules with no macOS backend yet are either left out there (`cfg(windows)`)
 // or swapped for a stand-in from `macos/` with the same commands, which
 // answer "nothing here" or "unsupported" so the frontend keeps working.
-#[cfg(windows)]
 mod audio;
 #[cfg(windows)]
 mod bluetooth;
@@ -138,7 +137,6 @@ pub fn run() {
             #[cfg(windows)]
             overlay::spawn_fullscreen_watch(app.handle().clone());
             media::spawn_watcher(app.handle().clone());
-            #[cfg(windows)]
             audio::spawn_analyser(app.handle().clone());
             clipboard::spawn_watcher(app.handle().clone());
             launcher::init(app.handle());
