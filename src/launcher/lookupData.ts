@@ -15,6 +15,7 @@ export interface LookupCache {
 const STALE_MS = 60 * 60 * 1000;
 
 let fetchedAt = 0;
+let failed = false;
 let refreshing: Promise<unknown> | null = null;
 let revision = 0;
 const listeners = new Set<(n: number) => void>();
@@ -22,13 +23,31 @@ const listeners = new Set<(n: number) => void>();
 function apply(cache: LookupCache | null) {
   if (!cache || !applyIndex(cache.index)) return;
   fetchedAt = cache.fetchedAt;
+  failed = false;
+  changed();
+}
+
+function changed() {
   revision++;
   listeners.forEach((l) => l(revision));
 }
 
+/** "ready" once a copy is in; before that, "loading" or "failed". */
+export const lookupState = (): "ready" | "loading" | "failed" => (fetchedAt ? "ready" : failed ? "failed" : "loading");
+
 /** Downloads lumen.json again; every window gets it through `lumen://lookup`. */
 export function refreshLookup(): Promise<LookupCache> {
-  refreshing ??= invoke<LookupCache>("lookup_refresh").finally(() => (refreshing = null));
+  if (!refreshing) {
+    failed = false;
+    changed();
+    refreshing = invoke<LookupCache>("lookup_refresh")
+      .catch((err) => {
+        failed = true;
+        changed();
+        throw err;
+      })
+      .finally(() => (refreshing = null));
+  }
   return refreshing as Promise<LookupCache>;
 }
 
@@ -46,7 +65,7 @@ function start() {
   });
 }
 
-/** Fetches again if the copy is over an hour old; failures leave what's there. */
+/** Fetches again if there's no copy or it's over an hour old; failures leave what's there. */
 export function ensureFresh() {
   if (isTauri && started && Date.now() - fetchedAt > STALE_MS && !refreshing) refreshLookup().catch(() => {});
 }

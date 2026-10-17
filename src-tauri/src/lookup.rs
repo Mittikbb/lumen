@@ -1,9 +1,9 @@
 //! Data for the "h:" search, from the lackyhy/Protocol-list repository: its
 //! lumen.json (HTTP codes and protocols, rebuilt there on every push) is
 //! downloaded through the system proxy, so edits to the repository reach
-//! Lumen without a new release. Nothing is written to disk: the last copy
-//! lives in memory until Lumen quits, and until the first download (or
-//! without a network) the frontend's built-in list is used.
+//! Lumen without a new release. It's the lookup's only source: nothing is
+//! built in, and nothing is written to disk either; the last copy lives in
+//! memory until Lumen quits.
 
 use std::{
     io::Read,
