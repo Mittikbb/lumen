@@ -92,20 +92,18 @@ export function ModulesSection({ settings }: { settings: Settings }) {
       <Heading>Погода</Heading>
       <WeatherSettings settings={settings} />
 
-      {/* No per-player volume on macOS yet. */}
-      {!isMac && (
-        <>
-          <Heading>Медиа</Heading>
-          <div className="st-card">
-            <Row title="Ползунок громкости" hint="Регулировка громкости трека прямо в плеере">
-              <Toggle
-                on={settings.media?.volumeSlider ?? true}
-                onChange={(volumeSlider) => updateSettings({ media: { volumeSlider } })}
-              />
-            </Row>
-          </div>
-        </>
-      )}
+      <Heading>Медиа</Heading>
+      <div className="st-card">
+        <Row
+          title="Ползунок громкости"
+          hint={isMac ? "Громкость Spotify и Музыки прямо в плеере" : "Регулировка громкости трека прямо в плеере"}
+        >
+          <Toggle
+            on={settings.media?.volumeSlider ?? true}
+            onChange={(volumeSlider) => updateSettings({ media: { volumeSlider } })}
+          />
+        </Row>
+      </div>
 
       <Heading>Плееры</Heading>
       <Players players={settings.players} />
