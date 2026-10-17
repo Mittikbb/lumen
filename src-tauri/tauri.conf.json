@@ -32,12 +32,12 @@
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data: https://cdn.discordapp.com",
+        "img-src": "'self' data: https://cdn.discordapp.com http://lumenaddon.localhost lumenaddon://localhost",
         "connect-src": "ipc: http://ipc.localhost https://api.open-meteo.com https://geocoding-api.open-meteo.com",
         "object-src": "'none'",
         "base-uri": "'none'",
         "form-action": "'none'",
-        "frame-src": "'none'"
+        "frame-src": "http://lumenaddon.localhost lumenaddon://localhost"
       },
       "dangerousDisableAssetCspModification": ["style-src"]
     }
