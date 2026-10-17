@@ -4,7 +4,8 @@
     "targets": ["app", "dmg"],
     "shortDescription": "A living island at the top of your Mac's screen",
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
     }
   }
 }
