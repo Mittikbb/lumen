@@ -16,6 +16,8 @@ export interface ProtocolInfo {
   fullName: string;
   description: string;
   docUrl: string;
+  /** Other names it's found by, lowercase: "tls" and "ssl" for TLS/SSL. */
+  aliases?: string[];
 }
 
 export interface GithubHelpItem {
@@ -27,7 +29,8 @@ export interface GithubHelpItem {
 
 export type NetworkSearchResult = HttpCodeInfo | ProtocolInfo | GithubHelpItem;
 
-export const HTTP_CODES: HttpCodeInfo[] = [
+/** Built in; the downloaded lumen.json is laid over these (applyIndex). */
+const BUILTIN_CODES: HttpCodeInfo[] = [
   // 1xx Informational
   {
     kind: "http",
@@ -615,7 +618,7 @@ export const HTTP_CODES: HttpCodeInfo[] = [
   },
 ];
 
-export const NETWORK_PROTOCOLS: ProtocolInfo[] = [
+const BUILTIN_PROTOCOLS: ProtocolInfo[] = [
   {
     kind: "protocol",
     id: "ethernet",
@@ -946,6 +949,78 @@ export const NETWORK_PROTOCOLS: ProtocolInfo[] = [
   },
 ];
 
+let HTTP_CODES = BUILTIN_CODES;
+let NETWORK_PROTOCOLS = BUILTIN_PROTOCOLS;
+
+const CATEGORIES = ["1xx", "2xx", "3xx", "4xx", "5xx"] as const;
+const text = (v: unknown, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/**
+ * Lays lumen.json from Protocol-list over the built-in lists: its codes and
+ * protocols win, the built-in ones it doesn't have stay. A code keeps its
+ * built-in Russian name unless the file brings one. Returns false (and
+ * changes nothing) if the file doesn't look right.
+ */
+export function applyIndex(index: unknown): boolean {
+  if (!index || typeof index !== "object") return false;
+  const { http, protocols } = index as { http?: unknown; protocols?: unknown };
+  if (!Array.isArray(http) || !Array.isArray(protocols)) return false;
+
+  const codes = new Map(BUILTIN_CODES.map((c) => [c.code, c]));
+  for (const raw of http) {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    const code = typeof r.code === "number" ? r.code : NaN;
+    const category = CATEGORIES.find((c) => c[0] === String(code)[0]);
+    if (!Number.isInteger(code) || code < 100 || code > 599 || !category || !text(r.phrase)) continue;
+    const known = codes.get(code);
+    codes.set(code, {
+      kind: "http",
+      code,
+      phrase: text(r.phrase, 80),
+      nameRu: text(r.nameRu, 80) || known?.nameRu || text(r.phrase, 80),
+      description: text(r.description) || known?.description || "",
+      category,
+    });
+  }
+
+  let builtIn = BUILTIN_PROTOCOLS;
+  const fresh: ProtocolInfo[] = [];
+  for (const raw of protocols) {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    const id = text(r.id, 60).toLowerCase();
+    const name = text(r.name, 60);
+    const file = text(r.file, 200);
+    if (!id || !name || !/^prot\/[^/]+\.md$/.test(file)) continue;
+    const aliases = Array.isArray(r.aliases)
+      ? r.aliases.map((a) => text(a, 60).toLowerCase()).filter(Boolean)
+      : [id, name.toLowerCase()];
+    // The built-in entry for the same protocol (by id or any of its names) gives way.
+    const same = new Set([...aliases, name].map(compact));
+    builtIn = builtIn.filter((p) => !same.has(compact(p.id)) && !same.has(compact(p.name)));
+    fresh.push({
+      kind: "protocol",
+      id,
+      name,
+      fullName: text(r.fullName, 120),
+      description: text(r.description),
+      docUrl: `${GITHUB_REPO_URL}/blob/main/${file.split("/").map(encodeURIComponent).join("/")}`,
+      aliases,
+    });
+  }
+
+  HTTP_CODES = [...codes.values()].sort((a, b) => a.code - b.code);
+  NETWORK_PROTOCOLS = [...fresh, ...builtIn];
+  return true;
+}
+
+/** How many codes and protocols the search knows now. */
+export const lookupSize = () => ({ codes: HTTP_CODES.length, protocols: NETWORK_PROTOCOLS.length });
+
+/** "Wi-Fi", "wi fi" and "wifi" are the same name. */
+const compact = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N}+]/gu, "");
+const isAlias = (p: ProtocolInfo, name: string) =>
+  [p.id, p.name, ...(p.aliases ?? [])].some((n) => n === name || compact(n) === compact(name));
+
 const POPULAR_CODES = [200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 418, 429, 500, 502, 503];
 
 /**
@@ -967,7 +1042,7 @@ export function searchHttpCodes(query: string): NetworkSearchResult[] {
     const sub = (helpMatch[1] ?? "").trim();
     if (sub) {
       const targetProt = NETWORK_PROTOCOLS.find(
-        (p) => p.name.toLowerCase() === sub.toLowerCase() || p.id === sub.toLowerCase(),
+        (p) => p.name.toLowerCase() === sub.toLowerCase() || isAlias(p, sub.toLowerCase()),
       );
       if (targetProt) {
         return [
@@ -1068,7 +1143,7 @@ export function searchHttpCodes(query: string): NetworkSearchResult[] {
     const fullLower = item.fullName.toLowerCase();
     const descLower = item.description.toLowerCase();
 
-    if (nameLower === lower || item.id === lower) {
+    if (nameLower === lower || isAlias(item, lower)) {
       score += 120;
     } else if (nameLower.startsWith(lower)) {
       score += 80;

@@ -19,6 +19,7 @@ mod hotkeys;
 #[cfg_attr(target_os = "macos", path = "macos/keyboard.rs")]
 mod keyboard;
 mod launcher;
+mod lookup;
 #[cfg_attr(target_os = "macos", path = "macos/media.rs")]
 mod media;
 mod net;
@@ -125,6 +126,8 @@ pub fn run() {
             hotkeys::hotkeys_busy,
             downloads::downloads_reveal,
             games::games_preview,
+            lookup::lookup_cached,
+            lookup::lookup_refresh,
             addons::addons_list,
             addons::addons_open_folder,
             addons::addons_storage_get,

@@ -17,6 +17,7 @@ import { ENGINES } from "./engines";
 import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
 import { AddonResults, prefixOwner, selectAddonResult, useAddonSearch } from "../addons/host";
 import { AddonIcon } from "../addons/AddonPanel";
+import { ensureFresh, useLookupData } from "./lookupData";
 
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
@@ -445,12 +446,19 @@ export function LauncherPanel({
   };
 
   const addonResults = useAddonSearch(query);
+  // Codes and protocols from Protocol-list on GitHub, over the built-in ones.
+  const lookupData = useLookupData(lookup);
   const results = useMemo(
     () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults),
-    [query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults],
+    // lookupData: a new copy of the list changes what the same query finds.
+    [query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults, lookupData],
   );
 
   // Fresh, focused search box every time the launcher opens.
+  useEffect(() => {
+    if (open && lookup) ensureFresh();
+  }, [open, lookup]);
+
   useEffect(() => {
     if (open) {
       setQuery("");
