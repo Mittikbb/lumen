@@ -19,8 +19,8 @@ use crate::net;
 /// Tried in order; jsDelivr is there for networks where GitHub's raw files
 /// don't load (it may lag behind by a few hours).
 const SOURCES: [&str; 2] = [
-    "https://raw.githubusercontent.com/lackyhy/Protocol-list/main/lumen.json",
-    "https://cdn.jsdelivr.net/gh/lackyhy/Protocol-list@main/lumen.json",
+    "https://raw.githubusercontent.com/lackyhy/Protocol-list/main/.github/lumen.json",
+    "https://cdn.jsdelivr.net/gh/lackyhy/Protocol-list@main/.github/lumen.json",
 ];
 const LIMIT: u64 = 2 * 1024 * 1024;
 
