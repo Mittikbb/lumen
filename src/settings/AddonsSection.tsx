@@ -27,6 +27,7 @@ const PERMISSION_TEXT: Record<Permission, string> = {
   network: "Ходить в интернет",
   foreground: "Видеть, какая программа сейчас активна",
   hotkeys: "Отключать сочетания клавиш Lumen",
+  terminal: "Запускать выбранные тобой команды в терминале — это полный доступ к компьютеру",
 };
 
 /** Аддоны: what's in the addons folder, switched on with the user's consent. */
@@ -146,7 +147,8 @@ function AddonCard({ addon, settings }: { addon: AddonInfo; settings: Settings }
 function Abilities({ addon, had }: { addon: AddonInfo; had: string[] | null }) {
   const lines: { text: string; fresh?: boolean }[] = [];
   if (addon.tab) lines.push({ text: `Вкладка «${addon.tab.label}» на острове` });
-  if (addon.search) lines.push({ text: "Ответы в поиске" });
+  if (addon.search)
+    lines.push({ text: addon.searchPrefix ? `Запросы в поиске, начинающиеся с «${addon.searchPrefix}»` : "Ответы в поиске" });
   for (const p of addon.permissions) {
     const text = p === "network" ? `${PERMISSION_TEXT.network}: ${addon.network.join(", ")}` : PERMISSION_TEXT[p];
     const fresh = !!had && (!had.includes(p) || (p === "network" && addon.network.some((h) => !had.includes(`network:${h}`))));

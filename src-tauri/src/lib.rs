@@ -134,6 +134,7 @@ pub fn run() {
             addons::addons_watch_front,
             addons::addons_front,
             addons::addons_pause_hotkeys,
+            addons::addons_terminal,
         ])
         .setup(|app| {
             let window = app

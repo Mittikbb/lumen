@@ -34,6 +34,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::{clipboard::sys as clipboard, hotkeys, net, settings};
 
 mod front;
+mod terminal;
 
 /// The URI scheme addon files are served from.
 pub const SCHEME: &str = "lumenaddon";
@@ -41,7 +42,9 @@ pub const SCHEME: &str = "lumenaddon";
 const API_VERSION: u32 = 1;
 const SDK: &str = include_str!("sdk.js");
 /// Every permission an addon may ask for; see docs/addons.md.
-const PERMISSIONS: [&str; 7] = ["notify", "clipboard", "links", "media", "network", "foreground", "hotkeys"];
+const PERMISSIONS: [&str; 8] = [
+    "notify", "clipboard", "links", "media", "network", "foreground", "hotkeys", "terminal",
+];
 const POLL: Duration = Duration::from_secs(2);
 /// An addon's stored data, serialized.
 const STORAGE_LIMIT: usize = 1024 * 1024;
@@ -69,6 +72,9 @@ pub struct AddonInfo {
     network: Vec<String>,
     tab: Option<Tab>,
     search: bool,
+    /// Queries starting with this belong to the addon alone (manifest
+    /// `"search": { "prefix": "-" }`).
+    search_prefix: Option<String>,
     settings: Vec<Value>,
     /// Newest modification time of its files; changes when it's edited.
     stamp: u64,
@@ -101,10 +107,28 @@ struct Manifest {
     #[serde(default)]
     network: Vec<String>,
     tab: Option<Tab>,
+    /// `true`, or `{ "prefix": "-" }`.
     #[serde(default)]
-    search: bool,
+    search: Value,
     #[serde(default)]
     settings: Vec<Value>,
+}
+
+impl Manifest {
+    /// Whether it answers in search, and the prefix it owns, if any.
+    fn search(&self) -> Result<(bool, Option<String>), String> {
+        match &self.search {
+            Value::Null | Value::Bool(false) => Ok((false, None)),
+            Value::Bool(true) => Ok((true, None)),
+            Value::Object(o) => match o.get("prefix").and_then(Value::as_str) {
+                Some(p) if (1..=8).contains(&p.chars().count()) && !p.contains(char::is_whitespace) => {
+                    Ok((true, Some(p.to_string())))
+                }
+                _ => Err("search.prefix: от 1 до 8 символов без пробелов".into()),
+            },
+            _ => Err("search: true или { \"prefix\": \"…\" }".into()),
+        }
+    }
 }
 
 fn default_main() -> String {
@@ -204,6 +228,7 @@ fn load(dir: &Path) -> AddonInfo {
         network: Vec::new(),
         tab: None,
         search: false,
+        search_prefix: None,
         settings: Vec::new(),
         stamp,
         error: Some(error),
@@ -219,6 +244,10 @@ fn load(dir: &Path) -> AddonInfo {
     if let Err(e) = validate(&manifest, dir) {
         return broken(e);
     }
+    let (search, search_prefix) = match manifest.search() {
+        Ok(search) => search,
+        Err(e) => return broken(e),
+    };
     AddonInfo {
         id: manifest.id,
         folder,
@@ -231,7 +260,8 @@ fn load(dir: &Path) -> AddonInfo {
         permissions: manifest.permissions,
         network: manifest.network.iter().map(|h| h.to_ascii_lowercase()).collect(),
         tab: manifest.tab,
-        search: manifest.search,
+        search,
+        search_prefix,
         settings: manifest.settings,
         stamp,
         error: None,
@@ -517,6 +547,22 @@ pub fn addons_front() -> Option<front::Front> {
 #[tauri::command]
 pub fn addons_pause_hotkeys(app: AppHandle, paused: bool) {
     hotkeys::pause(&app, paused);
+}
+
+/// Runs a command the user chose in a new terminal window, for an addon
+/// allowed "terminal".
+#[tauri::command]
+pub fn addons_terminal(app: AppHandle, id: String, command: String, shell: Option<String>) -> Result<(), String> {
+    let (info, _) = app.state::<Addons>().dir(&id).ok_or("addon not found")?;
+    let allowed = granted(&app, &id).ok_or("addon is not enabled")?;
+    if !info.permissions.iter().any(|p| p == "terminal") || !allowed.iter().any(|p| p == "terminal") {
+        return Err("permission \"terminal\" is not granted".into());
+    }
+    let command = command.trim();
+    if command.is_empty() || command.len() > 8000 || command.contains(['\r', '\n']) {
+        return Err("bad command".into());
+    }
+    terminal::open(command, shell.as_deref().unwrap_or("powershell"))
 }
 
 #[derive(Deserialize)]

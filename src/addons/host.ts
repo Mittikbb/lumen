@@ -258,6 +258,16 @@ export function searchAddons(query: string, onResults: (results: AddonResults) =
   };
 }
 
+/** The running addon that owns this query by its search prefix, if any. */
+export function prefixOwner(query: string): AddonInfo | null {
+  const q = query.trimStart();
+  for (const frame of frames.values()) {
+    const prefix = frame.addon.searchPrefix;
+    if (prefix && q.startsWith(prefix)) return frame.addon;
+  }
+  return null;
+}
+
 /** Addon results for what's typed in search; stale ones are never shown. */
 export function useAddonSearch(query: string): AddonResults[] {
   const [found, setFound] = useState<{ query: string; results: AddonResults[] }>({ query: "", results: [] });
@@ -294,6 +304,8 @@ function cleanItems(raw: unknown[]): SearchItem[] {
       icon: typeof i.icon === "string" ? i.icon : undefined,
       copy: typeof i.copy === "string" ? i.copy.slice(0, 100_000) : undefined,
       open: typeof i.open === "string" ? i.open : undefined,
+      terminal: typeof i.terminal === "string" && i.terminal.trim() && !/[\r\n]/.test(i.terminal) ? i.terminal.slice(0, 8000) : undefined,
+      shell: typeof i.shell === "string" ? i.shell : undefined,
     }));
 }
 
@@ -301,7 +313,13 @@ function cleanItems(raw: unknown[]): SearchItem[] {
 export function selectAddonResult(addon: AddonInfo, item: SearchItem) {
   const frame = frames.get(addon.id);
   if (!frame) return;
-  if (item.copy != null && can(frame, "clipboard")) {
+  if (item.terminal && can(frame, "terminal")) {
+    // The command the user picked runs in plain sight, in its own window.
+    launcher.close(false);
+    invoke("addons_terminal", { id: addon.id, command: item.terminal, shell: item.shell ?? null }).catch((err) =>
+      noticeSink?.({ addon, title: "Не удалось запустить", detail: String(err) }),
+    );
+  } else if (item.copy != null && can(frame, "clipboard")) {
     launcher.copy(item.copy);
   } else if (item.open && /^https?:\/\//i.test(item.open) && can(frame, "links")) {
     launcher.openUrl(item.open);

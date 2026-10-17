@@ -1,5 +1,13 @@
 /** What an addon may ask for in its manifest; the user grants each one. */
-export type Permission = "notify" | "clipboard" | "links" | "media" | "network" | "foreground" | "hotkeys";
+export type Permission =
+  | "notify"
+  | "clipboard"
+  | "links"
+  | "media"
+  | "network"
+  | "foreground"
+  | "hotkeys"
+  | "terminal";
 
 export interface AddonTab {
   label: string;
@@ -22,6 +30,8 @@ export interface AddonInfo {
   network: string[];
   tab: AddonTab | null;
   search: boolean;
+  /** Queries starting with this go to this addon alone, e.g. "-". */
+  searchPrefix: string | null;
   /** Raw manifest "settings"; see settingFields. */
   settings: unknown[];
   /** Changes whenever one of its files does. */
@@ -53,6 +63,10 @@ export interface SearchItem {
   copy?: string;
   /** Enter opens this link (with "links"). */
   open?: string;
+  /** Enter runs this command in a terminal window (with "terminal"). */
+  terminal?: string;
+  /** For `terminal` on Windows: "powershell" (the default), "pwsh" or "cmd". */
+  shell?: string;
 }
 
 /** A lasting line in the collapsed island, e.g. a build or a countdown. */

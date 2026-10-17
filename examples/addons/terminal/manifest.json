@@ -1,0 +1,25 @@
+{
+  "id": "terminal",
+  "name": "Терминал",
+  "version": "1.0.0",
+  "lumen": 1,
+  "author": "Lumen",
+  "description": "«-команда» в поиске выполняет её в терминале по умолчанию",
+  "icon": ">_",
+  "permissions": ["terminal"],
+  "search": { "prefix": "-" },
+  "settings": [
+    {
+      "key": "shell",
+      "type": "select",
+      "label": "Оболочка",
+      "hint": "На Windows; на macOS команда идёт в Терминал",
+      "default": "powershell",
+      "options": [
+        { "value": "powershell", "label": "PowerShell" },
+        { "value": "pwsh", "label": "PowerShell 7" },
+        { "value": "cmd", "label": "Командная строка (cmd)" }
+      ]
+    }
+  ]
+}
