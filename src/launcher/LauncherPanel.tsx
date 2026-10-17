@@ -15,6 +15,8 @@ import { isTauri } from "../island/env";
 import { formatShortcut, Hotkeys, openSettings, SearchEngine, CodeBorderColor } from "../settings/useSettings";
 import { ENGINES } from "./engines";
 import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
+import { AddonResults, selectAddonResult, useAddonSearch } from "../addons/host";
+import { AddonIcon } from "../addons/AddonPanel";
 
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
@@ -67,6 +69,7 @@ function buildResults(
   engine: SearchEngine,
   maxApps: number,
   lookup: boolean,
+  addons: AddonResults[],
 ): Result[] {
   const q = query.trim();
   const out: Result[] = [];
@@ -224,6 +227,22 @@ function buildResults(
           run: () => launcher.run(app.id),
         }),
       );
+  }
+
+  // Answers from addons, after the apps: they arrive a moment later, so the
+  // first results don't move under the cursor.
+  if (!isHttpQuery) {
+    for (const { addon, items } of addons) {
+      for (const item of items) {
+        out.push({
+          key: `addon:${addon.id}:${item.id}`,
+          icon: <AddonIcon addon={addon} icon={item.icon} />,
+          title: item.title,
+          hint: item.hint ? `${item.hint} · ${addon.name}` : addon.name,
+          run: () => selectAddonResult(addon, item),
+        });
+      }
+    }
   }
 
   if (URL_LIKE.test(q)) {
@@ -420,9 +439,10 @@ export function LauncherPanel({
     onDetailChange?.(item);
   };
 
+  const addonResults = useAddonSearch(query);
   const results = useMemo(
-    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup),
-    [query, apps, ai, hotkeys, engine, maxApps, lookup],
+    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults),
+    [query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults],
   );
 
   // Fresh, focused search box every time the launcher opens.

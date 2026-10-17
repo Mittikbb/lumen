@@ -11,4 +11,7 @@ export const TABS = [
   { id: "launcher", label: "Поиск" },
 ] as const;
 
-export type TabId = (typeof TABS)[number]["id"];
+/** A built-in tab, or an addon's as "addon:<id>". */
+export type TabId = (typeof TABS)[number]["id"] | `addon:${string}`;
+
+export const addonTabId = (id: string): TabId => `addon:${id}`;

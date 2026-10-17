@@ -2826,3 +2826,328 @@ html.capture-root #root {
 .stage.neon .island.island-halo::before {
   inset: -2px;
 }
+
+/* Addons: their hidden frames, their tabs, icons and live activity. */
+.addon-frames {
+  position: fixed;
+  left: -10px;
+  top: -10px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.addon-frames iframe {
+  width: 1px;
+  height: 1px;
+  border: 0;
+}
+
+.panel.addon-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  overflow: hidden;
+}
+
+.panel.addon-panel > .ad-column {
+  flex: 1;
+  min-height: 0;
+}
+
+.ad-column,
+.ad-row {
+  display: flex;
+  min-width: 0;
+}
+
+.ad-column {
+  flex-direction: column;
+}
+
+.ad-row {
+  align-items: center;
+}
+
+.ad-column.scroll,
+.ad-row.scroll {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.ad-column.grow,
+.ad-row.grow,
+.ad-text.grow,
+.ad-spacer {
+  flex: 1;
+  min-height: 0;
+}
+
+.ad-text {
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.ad-text.title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ad-text.big {
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-text.muted {
+  font-size: 12px;
+  color: var(--island-fg-muted);
+}
+
+.ad-text.mono {
+  font-family: "Cascadia Mono", Consolas, "SF Mono", monospace;
+  font-size: 12px;
+}
+
+.ad-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--island-fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.ad-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ad-button:active {
+  transform: scale(0.97);
+}
+
+.ad-button.primary {
+  color: #111;
+  font-weight: 600;
+  background: linear-gradient(90deg, var(--glow-a), var(--glow-b));
+}
+
+.ad-button.primary:hover {
+  filter: brightness(1.08);
+}
+
+.ad-button.ghost {
+  background: transparent;
+  color: var(--island-fg-muted);
+}
+
+.ad-button.ghost:hover {
+  color: var(--island-fg);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.search-box.ad-input {
+  padding: 8px 12px;
+  border: 1px solid var(--island-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.search-box.ad-input input {
+  font-size: 13px;
+}
+
+.ad-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.ad-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 12px;
+}
+
+.ad-item.clickable {
+  cursor: pointer;
+}
+
+.ad-item.clickable:hover {
+  background: color-mix(in srgb, var(--glow-a) 12%, rgba(255, 255, 255, 0.04));
+}
+
+.ad-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ad-item-title,
+.ad-item-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-item-title {
+  font-size: 13px;
+}
+
+.ad-item-sub {
+  font-size: 11px;
+  color: var(--island-fg-muted);
+}
+
+.ad-item-trailing {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--island-fg-muted);
+}
+
+.ad-empty {
+  padding: 18px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--island-fg-muted);
+}
+
+.ad-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ad-progress-label {
+  font-size: 12px;
+  color: var(--island-fg-muted);
+}
+
+.ad-progress-track,
+.addon-activity-bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ad-progress-track i,
+.addon-activity-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--glow-a), var(--glow-b));
+}
+
+.ad-stat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ad-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-stat-label {
+  font-size: 11px;
+  color: var(--island-fg-muted);
+}
+
+.ad-image {
+  max-width: 100%;
+  object-fit: cover;
+}
+
+.ad-divider {
+  width: 100%;
+  margin: 2px 0;
+  border: 0;
+  border-top: 1px solid var(--island-line);
+}
+
+.ad-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  object-fit: contain;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.ad-icon.letter {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.result-icon .ad-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.result-icon .ad-icon.letter,
+.result-icon .ad-icon.glyph {
+  width: 100%;
+  height: 100%;
+}
+
+.ad-icon.bare,
+.notice .ad-icon,
+.download-icon .ad-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.notice .ad-icon.letter,
+.download-icon .ad-icon.letter {
+  font-size: 10px;
+}
+
+/* A determinate bar along the bottom edge instead of the running light. */
+.addon-activity-bar {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 0;
+  height: 2px;
+  background: transparent;
+}

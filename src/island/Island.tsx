@@ -27,7 +27,7 @@ import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "./env";
 import { DEFAULT_SETTINGS, formatShortcut, openSettings, sparksOn, useSettings } from "../settings/useSettings";
 import { useLook } from "../settings/look";
-import { TABS, TabId } from "./tabs";
+import { TABS, TabId, addonTabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MIC_OFF, MiniCall } from "../discord/CallPanel";
 import { CallDrop, notifyWidth } from "../discord/CallDrop";
@@ -43,6 +43,9 @@ import { BluetoothView } from "../devices/BluetoothView";
 import { useGame } from "../games/useGame";
 import { GameView } from "../games/GameView";
 import type { MotionPrefs } from "../settings/useSettings";
+import { isActive, useAddonList } from "../addons/useAddons";
+import { AddonActivityView, AddonIcon, AddonPanel } from "../addons/AddonPanel";
+import { addonTabShown, onAddonNotice, useAddonHost, useHasActivity } from "../addons/host";
 
 /** The night screen's width, and its height against the usual one. */
 const NIGHT_WIDTH = 262;
@@ -65,6 +68,12 @@ const CALL_TAB_WIDTH = 80;
 const DETAIL_WIDTH = 295;
 /** Kept free on each side of the island so its glow isn't cut by the window. */
 const SIDE_ROOM = 40;
+/** An addon's tab: its height unless it asks for another, and the bounds of that. */
+const ADDON_HEIGHT = 270;
+const ADDON_HEIGHT_MIN = 180;
+const ADDON_HEIGHT_MAX = 340;
+/** Room a tab button takes in the row, for its label. */
+const tabWidth = (label: string) => Math.round(label.length * 7.5 + 26);
 /** Tabs with more content get a taller island. */
 const EXPANDED_HEIGHT: Partial<Record<string, number>> = {
   call: 262,
@@ -146,6 +155,11 @@ export function Island() {
   const look = settings?.look;
   const hotkeys = prefs.hotkeys;
   const discord = useDiscord();
+  // Addons: their frames, tabs, notices and live activities.
+  const addonList = useAddonList();
+  useAddonHost(addonList, settings?.addons, media);
+  const addonTabs = settings ? addonList.filter((a) => a.tab && isActive(a, settings.addons)) : [];
+  const activity = useHasActivity();
   const voice = discord.voice;
   const blur = moves.blur && !moves.reduced;
   const noticeMs = (ms: number) => ms * notices.duration;
@@ -160,9 +174,16 @@ export function Island() {
   const launcherOpen = useLauncherOpen();
   const shelfItems = useShelf();
   const hidden = settings?.hiddenTabs ?? [];
-  const tabs = TABS.filter(
+  const builtIn = TABS.filter(
     (t) => t.id === "launcher" || (!hidden.includes(t.id) && (t.id !== "call" || !!voice)),
   );
+  // Addon tabs sit before search, which always stays last.
+  const tabs: { id: TabId; label: string }[] = [
+    ...builtIn.filter((t) => t.id !== "launcher"),
+    ...addonTabs.map((a) => ({ id: addonTabId(a.id), label: a.tab!.label })),
+    ...builtIn.filter((t) => t.id === "launcher"),
+  ];
+  const openAddon = addonTabs.find((a) => addonTabId(a.id) === tab);
   const showsTab = (id: TabId) => tabs.some((t) => t.id === id);
   // A call in the collapsed island itself; the "drop" style keeps it outside.
   const miniCall = !!voice && showsTab("call") && prefs.call.style !== "drop";
@@ -214,7 +235,7 @@ export function Island() {
   // something else has the island (a notice, a call, music playing).
   const night = useNight(prefs.night);
   const showsTrack = !!media && rest.track && (media.playing || !night);
-  const nightShown = night && !game && !notice && !bluetooth && !downloading && !miniCall && !showsTrack;
+  const nightShown = night && !game && !notice && !bluetooth && !downloading && !activity && !miniCall && !showsTrack;
   // Rain or snow inside the capsule while it falls outside.
   const forecast = weatherCity ? weather.forecast : null;
   const fx = rest.weatherFx && !moves.reduced && forecast ? precipitation(forecast.code) : null;
@@ -223,7 +244,7 @@ export function Island() {
   const collapsedSize = {
     width: game
       ? Math.max(GAME_WIDTH, shape.width)
-      : notice || bluetooth || downloading
+      : notice || bluetooth || downloading || activity
       ? Math.max(NOTICE_WIDTH, shape.width + 70)
       : miniCall
         ? Math.max(shape.width, 250)
@@ -424,6 +445,22 @@ export function Island() {
     };
   }, []);
 
+  // Addons' notices look like Lumen's own, with the addon's icon.
+  useEffect(() => {
+    onAddonNotice((n) =>
+      setNotice({ title: n.title, detail: n.detail, icon: <AddonIcon addon={n.addon} bare />, ms: noticeMsRef.current(NOTICE_MS) }),
+    );
+    return () => onAddonNotice(null);
+  }, []);
+
+  // The open addon tab hears when it's shown and hidden.
+  const shownAddon = expanded && openAddon ? openAddon.id : null;
+  useEffect(() => {
+    if (!shownAddon) return;
+    addonTabShown(shownAddon, true);
+    return () => addonTabShown(shownAddon, false);
+  }, [shownAddon]);
+
   // Copying anything: a small gulp, a flash of glow with a light sweeping
   // across the capsule, and (when collapsed) a short "copied" notice.
   useCopyEvents(clips, (entry) => {
@@ -464,10 +501,13 @@ export function Island() {
         // The extra "Звонок" tab needs room, or the clock gets cut off.
         width: expandedWidth(
           shape.expandedWidth + (showsTab("call") ? CALL_TAB_WIDTH : 0),
+          addonTabs.reduce((w, a) => w + tabWidth(a.tab!.label), 0),
           tab === "launcher" && !!detailItem,
           center,
         ),
-        height: EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT,
+        height: openAddon
+          ? clamp(openAddon.tab!.height ?? ADDON_HEIGHT, ADDON_HEIGHT_MIN, ADDON_HEIGHT_MAX)
+          : (EXPANDED_HEIGHT[tab] ?? EXPANDED_HEIGHT_DEFAULT),
       }
     : collapsedSize;
   const fade = (px: number) => (blur ? `blur(${px}px)` : "blur(0px)");
@@ -659,7 +699,9 @@ export function Island() {
                 </span>
                 <span className="clock">{time}</span>
               </div>
-              {tab === "call" && voice ? (
+              {openAddon ? (
+                <AddonPanel addon={openAddon} />
+              ) : tab === "call" && voice ? (
                 <CallPanel voice={voice} />
               ) : tab === "media" ? (
                 <MediaPanel media={media} />
@@ -723,6 +765,8 @@ export function Island() {
                 <BluetoothView event={bluetooth} reduced={moves.reduced} />
               ) : downloading ? (
                 <DownloadView active={downloads.active} done={downloads.done} reduced={moves.reduced} />
+              ) : activity ? (
+                <AddonActivityView reduced={moves.reduced} />
               ) : miniCall && voice ? (
                 <MiniCall voice={voice} speakerRight={prefs.call.style === "right"} />
               ) : media && showsTrack ? (
@@ -810,14 +854,14 @@ function useLingering<T>(value: T | null, ms: number): T | null {
 }
 
 /**
- * The expanded island's width, wider by the code card when it's open, but
- * never so wide that it (and its glow) runs out of the window: the card then
- * takes its room from the results list.
+ * The expanded island's width: wider by the addons' tabs and by the code card
+ * when it's open, but never so wide that it (and its glow) runs out of the
+ * window: the card then takes its room from the results list.
  */
-function expandedWidth(base: number, detail: boolean, center: number) {
-  if (!detail) return base;
+function expandedWidth(base: number, addonTabs: number, detail: boolean, center: number) {
   const room = 2 * Math.min(center, window.innerWidth - center) - 2 * SIDE_ROOM;
-  return Math.max(base, Math.min(base + DETAIL_WIDTH, room));
+  const width = Math.max(base, Math.min(base + addonTabs, room));
+  return detail ? Math.max(width, Math.min(width + DETAIL_WIDTH, room)) : width;
 }
 
 const SKIP_ICON = (
