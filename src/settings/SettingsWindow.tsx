@@ -77,7 +77,6 @@ const HOTKEY_GROUPS: { title: string; rows: HotkeyRowSpec[] }[] = [
 
 const HOTKEY_ROWS = HOTKEY_GROUPS.flatMap((g) => g.rows);
 
-
 /** Backend names for actions whose key another app holds. */
 type Action = keyof Hotkeys;
 
