@@ -28,9 +28,7 @@ use windows::Win32::{
     },
 };
 
-#[cfg(windows)]
-use crate::games;
-use crate::settings;
+use crate::{games, settings};
 
 /// Bounds in CSS pixels relative to the window, reported by the frontend.
 #[derive(Clone, Copy, Default, Deserialize)]
@@ -560,12 +558,10 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
 }
 
 /// How long the island's exit animation gets before its window is hidden.
-#[cfg(windows)]
 const HIDE_ANIMATION: Duration = Duration::from_millis(320);
 
 /// Hides the island while a fullscreen app (a game, a video) or, if asked, a
 /// maximized window is in front on its monitor, and brings it back afterwards.
-#[cfg(windows)]
 pub fn spawn_fullscreen_watch(app: AppHandle) {
     thread::spawn(move || {
         let mut hidden = false;
@@ -577,12 +573,20 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
             let Some(window) = app.get_webview_window("main") else {
                 continue;
             };
+            #[cfg(windows)]
             let Ok(hwnd) = window.hwnd() else {
                 continue;
             };
             let (display, games) = settings::read(&app, |s| (s.display.clone(), s.games.stats));
             let cover = if display.hide_fullscreen || display.hide_maximized || games {
-                cover_in_front(HWND(hwnd.0))
+                #[cfg(windows)]
+                {
+                    cover_in_front(HWND(hwnd.0))
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    cover_in_front(&window)
+                }
             } else {
                 Cover::default()
             };
@@ -613,7 +617,6 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
 }
 
 /// How another app's window in front covers the island's monitor.
-#[cfg(windows)]
 #[derive(Default)]
 struct Cover {
     /// Fills the whole monitor, taskbar included.
@@ -623,6 +626,76 @@ struct Cover {
     /// The app in front and its window title.
     pid: u32,
     title: String,
+}
+
+/// On macOS: the front app's windows from the window server (bounds need no
+/// Screen Recording permission), against the island's display. Native
+/// fullscreen apps live in their own Space, where the island isn't anyway;
+/// this catches games and players that cover the screen in place.
+#[cfg(target_os = "macos")]
+fn cover_in_front(island: &WebviewWindow) -> Cover {
+    use objc2_core_graphics::{CGWindowListCopyWindowInfo, CGWindowListOption};
+    use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
+
+    let Some((pid, name)) = crate::front::other_app() else {
+        return Cover::default();
+    };
+    // The island's display, in points from the main display's top-left.
+    let Some(monitor) = island.current_monitor().ok().flatten() else {
+        return Cover::default();
+    };
+    let scale = monitor.scale_factor();
+    let origin = monitor.position().to_logical::<f64>(scale);
+    let size = monitor.size().to_logical::<f64>(scale);
+    let Some(list) = CGWindowListCopyWindowInfo(
+        CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements,
+        0,
+    ) else {
+        return Cover::default();
+    };
+    // Toll-free bridged: a CFArray of CFDictionaries is an NSArray of NSDictionaries.
+    let windows = unsafe { &*(&*list as *const _ as *const NSArray<NSDictionary>) };
+    let number = |dict: &NSDictionary, key: &str| {
+        dict.objectForKey(&NSString::from_str(key))?
+            .downcast::<NSNumber>()
+            .ok()
+            .map(|n| n.doubleValue())
+    };
+    let mut cover = Cover {
+        pid: pid as u32,
+        title: name,
+        ..Cover::default()
+    };
+    for window in windows.iter() {
+        if number(&window, "kCGWindowOwnerPID") != Some(pid as f64) || number(&window, "kCGWindowLayer") != Some(0.0) {
+            continue;
+        }
+        let Some(bounds) = window
+            .objectForKey(&NSString::from_str("kCGWindowBounds"))
+            .and_then(|b| b.downcast::<NSDictionary>().ok())
+        else {
+            continue;
+        };
+        let (Some(x), Some(y), Some(w), Some(h)) = (
+            number(&bounds, "X"),
+            number(&bounds, "Y"),
+            number(&bounds, "Width"),
+            number(&bounds, "Height"),
+        ) else {
+            continue;
+        };
+        let covers_width = x <= origin.x + 1.0 && x + w >= origin.x + size.width - 1.0;
+        if !covers_width || y > origin.y + size.height || y + h < origin.y {
+            continue;
+        }
+        if y <= origin.y + 1.0 && y + h >= origin.y + size.height - 1.0 {
+            cover.fullscreen = true;
+        } else if h >= size.height * 0.8 {
+            // Zoomed: everything but the menu bar (and maybe the Dock).
+            cover.maximized = true;
+        }
+    }
+    cover
 }
 
 #[cfg(windows)]

@@ -1,6 +1,5 @@
-// Modules with no macOS backend yet are either left out there (`cfg(windows)`)
-// or swapped for a stand-in from `macos/` with the same commands, which
-// answer "nothing here" or "unsupported" so the frontend keeps working.
+// Modules built on Windows APIs have a macOS twin in `macos/` with the same
+// commands and functions, swapped in by `path`; the rest is shared.
 mod audio;
 #[cfg_attr(target_os = "macos", path = "macos/bluetooth.rs")]
 mod bluetooth;
@@ -24,6 +23,7 @@ mod media;
 mod net;
 mod overlay;
 mod pixels;
+// Only Windows has one; macOS reads the same settings elsewhere.
 #[cfg(windows)]
 mod registry;
 #[cfg_attr(target_os = "macos", path = "macos/secret.rs")]
@@ -134,7 +134,6 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             overlay::dock_to_top(&window)?;
             overlay::spawn_cursor_tracker(app.handle().clone());
-            #[cfg(windows)]
             overlay::spawn_fullscreen_watch(app.handle().clone());
             media::spawn_watcher(app.handle().clone());
             audio::spawn_analyser(app.handle().clone());

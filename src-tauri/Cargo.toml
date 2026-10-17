@@ -81,6 +81,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSGeometry",
     "NSNotification",
     "NSOperation",
+    "NSPropertyList",
     "NSString",
     "NSURL",
     "NSValue",
@@ -111,6 +112,7 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
     "CGEventTypes",
     "CGImage",
     "CGRemoteOperation",
+    "CGWindow",
 ] }
 # Secrets at rest under a key kept in the Keychain.
 aes-gcm = "0.11.1"
