@@ -290,7 +290,7 @@ pub fn spawn_watcher(app: AppHandle) {
         }
         *history.dir.lock().unwrap() = Some(dir);
         // A history kept in the clear by earlier versions gets sealed now.
-        if !stored.is_empty() && !stored.starts_with("dpapi:") {
+        if !stored.is_empty() && !secret::is_sealed(&stored) {
             history.seal_old_files();
         }
     }

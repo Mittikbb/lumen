@@ -18,7 +18,7 @@ mod front;
 #[cfg_attr(target_os = "macos", path = "macos/games.rs")]
 mod games;
 mod hotkeys;
-#[cfg(windows)]
+#[cfg_attr(target_os = "macos", path = "macos/keyboard.rs")]
 mod keyboard;
 mod launcher;
 #[cfg_attr(target_os = "macos", path = "macos/media.rs")]
@@ -150,11 +150,9 @@ pub fn run() {
             discord::init(app.handle());
             updates::spawn_checker(app.handle().clone());
             downloads::spawn_watcher(app.handle().clone());
+            keyboard::spawn_watcher(app.handle().clone());
             #[cfg(windows)]
-            {
-                keyboard::spawn_watcher(app.handle().clone());
-                bluetooth::spawn_watcher(app.handle().clone());
-            }
+            bluetooth::spawn_watcher(app.handle().clone());
 
             Ok(())
         })

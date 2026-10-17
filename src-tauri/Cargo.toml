@@ -73,11 +73,16 @@ windows = { version = "0.62", features = [
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = [
     "std",
+    "block2",
     "NSArray",
     "NSData",
     "NSDictionary",
+    "NSDistributedNotificationCenter",
     "NSGeometry",
+    "NSNotification",
+    "NSOperation",
     "NSString",
+    "NSValue",
 ] }
 objc2-app-kit = { version = "0.3", default-features = false, features = [
     "std",
@@ -106,7 +111,9 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
     "CGImage",
     "CGRemoteOperation",
 ] }
-
+# Secrets at rest under a key kept in the Keychain.
+aes-gcm = "0.11.1"
+block2 = "0.6"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
