@@ -11,7 +11,7 @@ import {
 import { fuzzyScore } from "./fuzzy";
 import { App, launcher, useAppIcon, useApps } from "./useLauncher";
 import { invoke } from "@tauri-apps/api/core";
-import { isMac, isTauri } from "../island/env";
+import { isTauri } from "../island/env";
 import { formatShortcut, Hotkeys, openSettings, SearchEngine, CodeBorderColor } from "../settings/useSettings";
 import { ENGINES } from "./engines";
 import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
@@ -87,7 +87,7 @@ function buildResults(
   if (/^(скрин|снимок|screen|shot)/.test(lower)) {
     out.push({ key: "shot", icon: ICONS.shot, title: "Скриншот области", hint: formatShortcut(hotkeys.screenshot), run: () => startCapture("shot") });
   }
-  if (!isMac && /^(текст с|распозн|ocr|скан)/.test(lower)) {
+  if (/^(текст с|распозн|ocr|скан)/.test(lower)) {
     out.push({ key: "ocr", icon: ICONS.scan, title: "Текст с экрана", hint: formatShortcut(hotkeys.text), run: () => startCapture("text") });
   }
 

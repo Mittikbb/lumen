@@ -1,12 +1,22 @@
-//! Screen capture on macOS. An area screenshot goes through the system's own
-//! selection (`screencapture -i -c`, the same as Cmd+Ctrl+Shift+4), which
-//! puts the picture on the clipboard. Text from the screen isn't wired up yet:
-//! it needs Vision's text recognition.
+//! Screen capture on macOS, through the system's own area selection (the
+//! same as Cmd+Ctrl+Shift+4): an area screenshot goes straight to the
+//! clipboard (Alt+Shift+S); for text (Alt+Shift+T) the area is saved to a
+//! temporary file, read with Vision's text recognition and the text copied.
 
-use std::{process::Command, sync::Mutex, thread};
+use std::{fs, path::Path, process::Command, sync::Mutex, thread};
+
+use objc2::AnyThread;
+use objc2_foundation::{NSArray, NSDictionary, NSString, NSURL};
+use objc2_vision::{
+    VNImageRequestHandler, VNRecognizeTextRequest, VNRequest, VNRequestTextRecognitionLevel,
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::clipboard::sys as clipboard;
+
+const SCREENCAPTURE: &str = "/usr/sbin/screencapture";
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -31,10 +41,6 @@ struct Notice {
 }
 
 pub fn start(app: &AppHandle, mode: Mode) {
-    if mode == Mode::Text {
-        notify(app, "Текст с экрана", "Пока не поддерживается на macOS");
-        return;
-    }
     {
         let capture = app.state::<Capture>();
         let mut current = capture.mode.lock().unwrap();
@@ -45,13 +51,90 @@ pub fn start(app: &AppHandle, mode: Mode) {
     }
     let app = app.clone();
     thread::spawn(move || {
-        // Blocks until the area is picked or the selection is cancelled (Esc).
-        let status = Command::new("/usr/sbin/screencapture").args(["-i", "-c", "-x"]).status();
-        *app.state::<Capture>().mode.lock().unwrap() = None;
-        if status.is_err() {
-            notify(&app, "Не удалось сделать снимок", "");
+        match mode {
+            Mode::Shot => {
+                // Blocks until the area is picked or the selection is cancelled (Esc).
+                if Command::new(SCREENCAPTURE).args(["-i", "-c", "-x"]).status().is_err() {
+                    notify(&app, "Не удалось сделать снимок", "");
+                }
+            }
+            Mode::Text => copy_text(&app),
         }
+        *app.state::<Capture>().mode.lock().unwrap() = None;
     });
+}
+
+fn copy_text(app: &AppHandle) {
+    let file = std::env::temp_dir().join(format!("lumen-text-{}.png", std::process::id()));
+    let _ = fs::remove_file(&file);
+    if Command::new(SCREENCAPTURE).args(["-i", "-x"]).arg(&file).status().is_err() {
+        notify(app, "Не удалось сделать снимок", "");
+        return;
+    }
+    // No file: the selection was cancelled.
+    if !file.exists() {
+        return;
+    }
+    // Recognition can take a while the first time (the model loads).
+    notify(app, "Распознаю текст…", "");
+    let text = recognize(&file);
+    let _ = fs::remove_file(&file);
+    match text {
+        Some(text) if text.trim().is_empty() => notify(app, "Текст не найден", "Попробуй выделить крупнее"),
+        Some(text) => {
+            let chars = text.chars().filter(|c| !c.is_whitespace()).count();
+            // Announce first, so the UI shows this rather than the generic
+            // "copied" notice that the clipboard change triggers.
+            notify(app, "Текст распознан", &format!("{chars} симв."));
+            if let Err(e) = clipboard::write_text(&text) {
+                notify(app, "Не удалось скопировать текст", &e);
+            }
+        }
+        None => notify(app, "Распознавание недоступно", "Vision не смог прочитать снимок"),
+    }
+}
+
+/// Vision's text recognition on an image file; lines joined with newlines,
+/// top to bottom.
+///
+/// The accurate recogniser reads Russian and English, with the language
+/// detected. On some macOS builds (27.0.x) its neural-engine model can fail
+/// to load, sometimes after a long wait; then the fast one still reads Latin
+/// text.
+fn recognize(file: &Path) -> Option<String> {
+    let url = NSURL::fileURLWithPath(&NSString::from_str(file.to_str()?));
+    let english = NSArray::from_retained_slice(&[NSString::from_str("en-US")]);
+    for level in [VNRequestTextRecognitionLevel::Accurate, VNRequestTextRecognitionLevel::Fast] {
+        let request = VNRecognizeTextRequest::new();
+        request.setRecognitionLevel(level);
+        request.setUsesLanguageCorrection(true);
+        if level == VNRequestTextRecognitionLevel::Accurate {
+            request.setAutomaticallyDetectsLanguage(true);
+        } else {
+            request.setRecognitionLanguages(&english);
+        }
+        let handler = unsafe {
+            VNImageRequestHandler::initWithURL_options(VNImageRequestHandler::alloc(), &url, &NSDictionary::new())
+        };
+        let requests = NSArray::from_slice(&[AsRef::<VNRequest>::as_ref(&*request)]);
+        match handler.performRequests_error(&requests) {
+            Ok(()) => return Some(lines(&request)),
+            Err(e) => eprintln!("text recognition ({level:?}): {}", e.localizedDescription()),
+        }
+    }
+    None
+}
+
+fn lines(request: &VNRecognizeTextRequest) -> String {
+    let Some(results) = request.results() else {
+        return String::new();
+    };
+    results
+        .iter()
+        .filter_map(|o| o.topCandidates(1).firstObject())
+        .map(|t| t.string().to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The system selection handles Esc itself.
@@ -85,3 +168,4 @@ fn notify(app: &AppHandle, title: &str, detail: &str) {
         },
     );
 }
+

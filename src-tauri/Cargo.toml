@@ -82,6 +82,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSNotification",
     "NSOperation",
     "NSString",
+    "NSURL",
     "NSValue",
 ] }
 objc2-app-kit = { version = "0.3", default-features = false, features = [
@@ -114,6 +115,16 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
 # Secrets at rest under a key kept in the Keychain.
 aes-gcm = "0.11.1"
 block2 = "0.6"
+# Text recognition for "Текст с экрана".
+objc2-vision = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "VNObservation",
+    "VNRecognizeTextRequest",
+    "VNRequest",
+    "VNRequestHandler",
+    "VNTypes",
+] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

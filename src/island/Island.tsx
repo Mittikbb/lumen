@@ -24,7 +24,7 @@ import { BeatSparks, Scope } from "../media/Visualizers";
 import { NightView, useNight } from "../night/NightView";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { isMac, isTauri } from "./env";
+import { isTauri } from "./env";
 import { DEFAULT_SETTINGS, formatShortcut, openSettings, sparksOn, useSettings } from "../settings/useSettings";
 import { useLook } from "../settings/look";
 import { PLATFORM_TABS, TabId } from "./tabs";
@@ -645,17 +645,14 @@ export function Island() {
                   >
                     {SHOT_ICON}
                   </button>
-                  {/* No text recognition on macOS yet. */}
-                  {!isMac && (
-                    <button
-                      className="tool"
-                      aria-label="Текст с экрана"
-                      title={`Текст с экрана · ${formatShortcut(hotkeys.text)}`}
-                      onClick={() => capture("text")}
-                    >
-                      {SCAN_ICON}
-                    </button>
-                  )}
+                  <button
+                    className="tool"
+                    aria-label="Текст с экрана"
+                    title={`Текст с экрана · ${formatShortcut(hotkeys.text)}`}
+                    onClick={() => capture("text")}
+                  >
+                    {SCAN_ICON}
+                  </button>
                   <button className="tool" aria-label="Настройки" title="Настройки" onClick={openSettings}>
                     {SETTINGS_ICON}
                   </button>
