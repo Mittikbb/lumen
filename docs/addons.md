@@ -4,7 +4,7 @@
 свою вкладку, ответы в поиск (Alt+Space), уведомления, строку активности в свёрнутом острове
 и свои настройки.
 
-Готовые примеры: [`examples/addons`](../examples/addons) — «Заметки» и «Помидор».
+Готовые примеры: [`examples/addons`](../examples/addons) — «Заметки», «Помидор» и «Без биндов в Доте».
 
 ## Установка
 
@@ -71,6 +71,8 @@ Lumen следит за файлами аддона: стоит сохранит
 | `links` | `lumen.open()` и `open` в результатах поиска |
 | `media` | `lumen.media.get()` и событие `media` |
 | `network` | `lumen.fetch()` к хостам из `network` |
+| `foreground` | `lumen.foreground.get()` и событие `foreground`: какая программа активна |
+| `hotkeys` | `lumen.hotkeys.pause()`: отпустить сочетания клавиш Lumen |
 
 Вкладка, поиск, хранилище и свои настройки разрешений не требуют.
 
@@ -108,6 +110,7 @@ lumen.settings;  // { confirm: true, limit: 50 }
 ```js
 const off = lumen.on("settings", (settings) => {});  // пользователь поменял настройки аддона
 lumen.on("media", (track) => {});      // сменился трек (нужно media)
+lumen.on("foreground", (front) => {}); // сменилась активная программа (нужно foreground)
 lumen.on("tab:show", () => {});        // вкладку аддона открыли
 lumen.on("tab:hide", () => {});        // и закрыли
 off();                                  // отписаться
@@ -194,7 +197,15 @@ await lumen.storage.get("key", "по умолчанию");
 await lumen.storage.remove("key");
 
 await lumen.media.get();                            // { title, artist, app, playing } или null (media)
+
+await lumen.foreground.get();                       // { app: "dota2", title: "Dota 2" } или null (foreground)
+await lumen.hotkeys.pause();                        // сочетания Lumen перестают работать (hotkeys)
+await lumen.hotkeys.resume();                       // и снова работают
 ```
+
+`app` — имя файла программы без `.exe`, в нижнем регистре. Пока сам Lumen в фокусе
+(например, печатаешь в острове), событие `foreground` не приходит. Сочетания возвращаются,
+когда ни один аддон их не держит, в том числе если аддон выключили или он упал.
 
 Ответы `fetch` — текст до 5 МБ. Ошибки (нет разрешения, хост не разрешён) приходят
 как отклонённый промис.

@@ -25,6 +25,8 @@ const PERMISSION_TEXT: Record<Permission, string> = {
   links: "Открывать ссылки в браузере",
   media: "Видеть, какой трек играет",
   network: "Ходить в интернет",
+  foreground: "Видеть, какая программа сейчас активна",
+  hotkeys: "Отключать сочетания клавиш Lumen",
 };
 
 /** Аддоны: what's in the addons folder, switched on with the user's consent. */

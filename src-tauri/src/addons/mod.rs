@@ -31,7 +31,9 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{clipboard::sys as clipboard, net, settings};
+use crate::{clipboard::sys as clipboard, hotkeys, net, settings};
+
+mod front;
 
 /// The URI scheme addon files are served from.
 pub const SCHEME: &str = "lumenaddon";
@@ -39,7 +41,7 @@ pub const SCHEME: &str = "lumenaddon";
 const API_VERSION: u32 = 1;
 const SDK: &str = include_str!("sdk.js");
 /// Every permission an addon may ask for; see docs/addons.md.
-const PERMISSIONS: [&str; 5] = ["notify", "clipboard", "links", "media", "network"];
+const PERMISSIONS: [&str; 7] = ["notify", "clipboard", "links", "media", "network", "foreground", "hotkeys"];
 const POLL: Duration = Duration::from_secs(2);
 /// An addon's stored data, serialized.
 const STORAGE_LIMIT: usize = 1024 * 1024;
@@ -496,6 +498,25 @@ pub fn addons_storage_set(app: AppHandle, id: String, data: Value) -> Result<(),
 #[tauri::command]
 pub fn addons_copy(text: String) -> Result<(), String> {
     clipboard::write_text(&text)
+}
+
+/// Watches the app in front while an addon with "foreground" runs.
+#[tauri::command]
+pub fn addons_watch_front(app: AppHandle, on: bool) {
+    front::watch(&app, on);
+}
+
+/// The app in front right now (the island checked the permission).
+#[tauri::command]
+pub fn addons_front() -> Option<front::Front> {
+    front::current()
+}
+
+/// Lets go of Lumen's shortcuts while an addon with "hotkeys" asks to, and
+/// takes them back once none does (the island keeps count).
+#[tauri::command]
+pub fn addons_pause_hotkeys(app: AppHandle, paused: bool) {
+    hotkeys::pause(&app, paused);
 }
 
 #[derive(Deserialize)]

@@ -1,0 +1,20 @@
+{
+  "id": "game-binds",
+  "name": "Без биндов в Доте",
+  "version": "1.0.0",
+  "lumen": 1,
+  "author": "Lumen",
+  "description": "Отключает сочетания клавиш Lumen, пока Dota 2 открыта и активна",
+  "icon": "🎮",
+  "permissions": ["foreground", "hotkeys", "notify"],
+  "settings": [
+    {
+      "key": "apps",
+      "type": "text",
+      "label": "Программы",
+      "hint": "Имена файлов через запятую, например dota2, cs2",
+      "default": "dota2"
+    },
+    { "key": "notify", "type": "toggle", "label": "Сообщать, когда бинды выключаются и включаются", "default": false }
+  ]
+}

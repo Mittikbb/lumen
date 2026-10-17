@@ -131,6 +131,9 @@ pub fn run() {
             addons::addons_storage_set,
             addons::addons_copy,
             addons::addons_fetch,
+            addons::addons_watch_front,
+            addons::addons_front,
+            addons::addons_pause_hotkeys,
         ])
         .setup(|app| {
             let window = app

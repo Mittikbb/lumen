@@ -1,5 +1,5 @@
 /** What an addon may ask for in its manifest; the user grants each one. */
-export type Permission = "notify" | "clipboard" | "links" | "media" | "network";
+export type Permission = "notify" | "clipboard" | "links" | "media" | "network" | "foreground" | "hotkeys";
 
 export interface AddonTab {
   label: string;

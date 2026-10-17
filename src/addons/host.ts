@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../island/env";
 import { launcher } from "../launcher/useLauncher";
 import type { NowPlaying } from "../media/useMedia";
@@ -21,6 +22,8 @@ interface Frame {
   config: string;
   ready: boolean;
   lastNotice: number;
+  /** It asked to let go of Lumen's shortcuts. */
+  pausing: boolean;
 }
 
 /** What a frame's SDK posts. */
@@ -62,6 +65,9 @@ let revision = 0;
 let media: Pick<NowPlaying, "title" | "artist" | "app" | "playing"> | null = null;
 let noticeSink: ((notice: AddonNotice) => void) | null = null;
 let container: HTMLDivElement | null = null;
+/** What the backend was last told: shortcuts let go, the app in front watched. */
+let hotkeysPaused = false;
+let watchingFront = false;
 
 const changed = () => {
   revision++;
@@ -90,8 +96,27 @@ function holder(): HTMLDivElement {
     container.setAttribute("aria-hidden", "true");
     document.body.appendChild(container);
     window.addEventListener("message", onMessage);
+    // A reloaded island must not leave the shortcuts let go by an addon that's gone.
+    invoke("addons_pause_hotkeys", { paused: false });
+    listen<unknown>("lumen://front", (e) => {
+      for (const frame of frames.values()) if (can(frame, "foreground")) emit(frame, "foreground", e.payload);
+    });
   }
   return container;
+}
+
+/** Tells the backend whether any addon holds the shortcuts or needs the app in front. */
+function syncBackend() {
+  const paused = [...frames.values()].some((f) => f.pausing && can(f, "hotkeys"));
+  if (paused !== hotkeysPaused) {
+    hotkeysPaused = paused;
+    invoke("addons_pause_hotkeys", { paused });
+  }
+  const watch = [...frames.values()].some((f) => can(f, "foreground"));
+  if (watch !== watchingFront) {
+    watchingFront = watch;
+    invoke("addons_watch_front", { on: watch });
+  }
 }
 
 function start(addon: AddonInfo, granted: string[], config: Record<string, unknown>) {
@@ -108,6 +133,7 @@ function start(addon: AddonInfo, granted: string[], config: Record<string, unkno
     config: JSON.stringify(config),
     ready: false,
     lastNotice: 0,
+    pausing: false,
   });
   holder().appendChild(el);
 }
@@ -122,6 +148,7 @@ function stop(id: string) {
 
 /** Starts, stops and reloads frames to match the addons folder and the settings. */
 export function syncAddons(list: AddonInfo[], prefs: AddonPrefs) {
+  holder();
   const active = new Map(list.filter((a) => isActive(a, prefs)).map((a) => [a.id, a]));
   let touched = false;
   for (const id of [...frames.keys()]) {
@@ -149,6 +176,7 @@ export function syncAddons(list: AddonInfo[], prefs: AddonPrefs) {
       emit(frame, "settings", config);
     }
   }
+  syncBackend();
   if (touched) changed();
 }
 
@@ -369,6 +397,14 @@ async function handle(frame: Frame, method: string, args: unknown[]): Promise<un
     case "media":
       need(frame, "media");
       return media;
+    case "foreground":
+      need(frame, "foreground");
+      return invoke("addons_front");
+    case "hotkeys.pause":
+      need(frame, "hotkeys");
+      frame.pausing = args[0] === true;
+      syncBackend();
+      return;
     default:
       throw new Error(`unknown method ${method}`);
   }

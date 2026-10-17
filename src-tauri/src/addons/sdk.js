@@ -73,7 +73,7 @@
     get settings() {
       return info.settings;
     },
-    /** Events: "settings", "media", "tab:show", "tab:hide", "action", "select". */
+    /** Events: "settings", "media", "foreground", "tab:show", "tab:hide", "action", "select". */
     on,
     /** A short notice in the collapsed island. Needs "notify". */
     notify: (title, detail = "") => call("notify", { title: String(title), detail: String(detail) }),
@@ -120,6 +120,15 @@
     /** What's playing: { title, artist, app, playing } or null. Needs "media". */
     media: {
       get: () => call("media"),
+    },
+    /** The app in front: { app: "dota2", title } or null. Needs "foreground". */
+    foreground: {
+      get: () => call("foreground"),
+    },
+    /** Lets go of Lumen's shortcuts until resumed (or the addon stops). Needs "hotkeys". */
+    hotkeys: {
+      pause: (paused = true) => call("hotkeys.pause", !!paused),
+      resume: () => call("hotkeys.pause", false),
     },
   };
 
