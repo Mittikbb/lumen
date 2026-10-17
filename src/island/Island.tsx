@@ -27,7 +27,7 @@ import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "./env";
 import { DEFAULT_SETTINGS, formatShortcut, openSettings, sparksOn, useSettings } from "../settings/useSettings";
 import { useLook } from "../settings/look";
-import { PLATFORM_TABS, TabId } from "./tabs";
+import { TABS, TabId } from "./tabs";
 import { useDiscord } from "../discord/useDiscord";
 import { CallPanel, MIC_OFF, MiniCall } from "../discord/CallPanel";
 import { CallDrop, notifyWidth } from "../discord/CallDrop";
@@ -160,7 +160,7 @@ export function Island() {
   const launcherOpen = useLauncherOpen();
   const shelfItems = useShelf();
   const hidden = settings?.hiddenTabs ?? [];
-  const tabs = PLATFORM_TABS.filter(
+  const tabs = TABS.filter(
     (t) => t.id === "launcher" || (!hidden.includes(t.id) && (t.id !== "call" || !!voice)),
   );
   const showsTab = (id: TabId) => tabs.some((t) => t.id === id);

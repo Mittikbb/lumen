@@ -13,7 +13,6 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 #[cfg(windows)]
 const INTERNET_SETTINGS: &str = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
 
-#[cfg_attr(not(windows), allow(dead_code))] // for Discord, not on macOS yet
 pub fn agent() -> ureq::Agent {
     let mut builder = ureq::AgentBuilder::new().timeout(TIMEOUT);
     if let Some(proxy) = system_proxy().and_then(|p| ureq::Proxy::new(p).ok()) {

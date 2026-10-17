@@ -9,7 +9,6 @@ mod browser;
 #[cfg_attr(target_os = "macos", path = "macos/capture.rs")]
 mod capture;
 mod clipboard;
-#[cfg_attr(target_os = "macos", path = "macos/discord.rs")]
 mod discord;
 mod downloads;
 #[cfg(target_os = "macos")]
@@ -146,7 +145,6 @@ pub fn run() {
             hotkeys::init(app.handle())?;
             shelf::init(app.handle());
             tray::init(app.handle())?;
-            #[cfg(windows)]
             discord::init(app.handle());
             updates::spawn_checker(app.handle().clone());
             downloads::spawn_watcher(app.handle().clone());

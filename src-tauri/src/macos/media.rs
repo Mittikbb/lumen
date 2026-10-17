@@ -148,6 +148,16 @@ pub struct MediaState {
     commands: Mutex<Option<ChildStdin>>,
 }
 
+/// Title, artist and player of the track that's playing right now.
+pub fn playing_track(app: &AppHandle) -> Option<(String, String, String)> {
+    let state = app.state::<MediaState>();
+    let shown = state.shown.lock().unwrap();
+    shown
+        .as_ref()
+        .filter(|n| n.playing)
+        .map(|n| (n.title.clone(), n.artist.clone(), n.app.clone()))
+}
+
 #[tauri::command]
 pub fn media_state(state: State<MediaState>) -> Option<NowPlaying> {
     state.shown.lock().unwrap().clone()

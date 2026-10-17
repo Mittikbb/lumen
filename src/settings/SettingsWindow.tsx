@@ -2,9 +2,9 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isMac, isTauri } from "../island/env";
+import { isTauri } from "../island/env";
 import { useApps } from "../launcher/useLauncher";
-import { PLATFORM_TABS, TabId } from "../island/tabs";
+import { TABS, TabId } from "../island/tabs";
 import { useLook } from "./look";
 import { Heading, Row, Toggle } from "./controls";
 import { IslandSection } from "./IslandSection";
@@ -37,8 +37,6 @@ const SECTIONS = [
   { id: "about", label: "О Lumen" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
-/** Discord isn't wired up on macOS yet. */
-const MAC_MISSING_SECTIONS: SectionId[] = ["discord"];
 
 const SECTION_ICONS: Record<SectionId, ReactNode> = {
   general: <path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4v6M8 14v6" />,
@@ -79,12 +77,6 @@ const HOTKEY_GROUPS: { title: string; rows: HotkeyRowSpec[] }[] = [
 
 const HOTKEY_ROWS = HOTKEY_GROUPS.flatMap((g) => g.rows);
 
-/** Actions with no backend on macOS yet: Discord. */
-const MAC_MISSING_HOTKEYS: (keyof Hotkeys)[] = ["mic"];
-const PLATFORM_HOTKEY_GROUPS = HOTKEY_GROUPS.map((g) => ({
-  ...g,
-  rows: g.rows.filter((r) => !(isMac && MAC_MISSING_HOTKEYS.includes(r.id))),
-})).filter((g) => g.rows.length > 0);
 
 /** Backend names for actions whose key another app holds. */
 type Action = keyof Hotkeys;
@@ -95,9 +87,7 @@ export function SettingsWindow() {
   const [section, setSection] = useState<SectionId>("general");
   // "Расширенные" stays out of the list until unlocked in О Lumen.
   const unlocked = !!settings?.advanced.unlocked;
-  const sections = SECTIONS.filter(
-    (s) => (s.id !== "advanced" || unlocked) && !(isMac && MAC_MISSING_SECTIONS.includes(s.id)),
-  );
+  const sections = SECTIONS.filter((s) => s.id !== "advanced" || unlocked);
   useEffect(() => {
     if (section === "advanced" && !unlocked) setSection("about");
   }, [section, unlocked]);
@@ -238,7 +228,7 @@ function GeneralSection({ settings }: { settings: Settings }) {
 
       <Heading>Вкладки острова</Heading>
       <div className="st-card">
-        {PLATFORM_TABS.map((tab) => {
+        {TABS.map((tab) => {
           const always = tab.id === "launcher";
           const on = always || !settings.hiddenTabs.includes(tab.id);
           return (
@@ -329,7 +319,7 @@ function KeysSection({ hotkeys }: { hotkeys: Hotkeys }) {
 
   return (
     <>
-      {PLATFORM_HOTKEY_GROUPS.map((group) => (
+      {HOTKEY_GROUPS.map((group) => (
         <div key={group.title}>
           <Heading>{group.title}</Heading>
           <div className="st-card">
