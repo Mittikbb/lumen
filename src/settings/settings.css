@@ -50,6 +50,11 @@ html.settings-root #root {
   transition: background 0.15s, color 0.15s;
 }
 
+/* "О Lumen" sits at the foot of the list. */
+.st-nav-item.bottom {
+  margin-top: auto;
+}
+
 .st-nav-item:hover {
   color: var(--island-fg);
   background: rgba(255, 255, 255, 0.05);

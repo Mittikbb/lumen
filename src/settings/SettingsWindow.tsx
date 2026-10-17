@@ -33,8 +33,8 @@ const SECTIONS = [
   { id: "look", label: "Внешний вид" },
   { id: "keys", label: "Клавиши" },
   { id: "modules", label: "Модули" },
-  { id: "addons", label: "Аддоны" },
   { id: "discord", label: "Discord" },
+  { id: "addons", label: "Аддоны" },
   { id: "advanced", label: "Расширенные" },
   { id: "about", label: "О Lumen" },
 ] as const;
@@ -109,7 +109,7 @@ export function SettingsWindow() {
         {sections.map((s) => (
           <button
             key={s.id}
-            className="st-nav-item"
+            className={`st-nav-item${s.id === "about" ? " bottom" : ""}`}
             aria-current={section === s.id ? "page" : undefined}
             onClick={() => setSection(s.id)}
           >
