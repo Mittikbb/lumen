@@ -14,11 +14,16 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 const INTERNET_SETTINGS: &str = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
 
 pub fn agent() -> ureq::Agent {
-    let mut builder = ureq::AgentBuilder::new().timeout(TIMEOUT);
-    if let Some(proxy) = system_proxy().and_then(|p| ureq::Proxy::new(p).ok()) {
-        builder = builder.proxy(proxy);
+    builder().build()
+}
+
+/// The agent's settings, for callers that change some before building it.
+pub fn builder() -> ureq::AgentBuilder {
+    let builder = ureq::AgentBuilder::new().timeout(TIMEOUT);
+    match system_proxy().and_then(|p| ureq::Proxy::new(p).ok()) {
+        Some(proxy) => builder.proxy(proxy),
+        None => builder,
     }
-    builder.build()
 }
 
 pub fn system_proxy() -> Option<String> {

@@ -39,6 +39,8 @@ pub struct Bindings {
     /// While the settings window records a new shortcut, every key is let go
     /// so the pressed combination reaches it.
     suspended: AtomicBool,
+    /// An addon let go of the keys too, e.g. while a game is in front.
+    paused: AtomicBool,
     /// Serialises swaps and suspends, which arrive from parallel commands.
     op: Mutex<()>,
 }
@@ -143,17 +145,36 @@ pub fn apply(app: &AppHandle, hotkeys: &settings::Hotkeys) -> Result<(), String>
     let old = std::mem::replace(&mut *bindings.keys.lock().unwrap(), keys);
     let generation = bindings.generation.fetch_add(1, Ordering::SeqCst) + 1;
     unregister(app, &old);
-    if !bindings.suspended.load(Ordering::SeqCst) {
+    if !bindings.off() {
         register(app, generation);
     }
     Ok(())
 }
 
-/// Lets go of every shortcut (`true`) or takes them back (`false`).
+impl Bindings {
+    /// Whether the keys are let go, for either reason.
+    fn off(&self) -> bool {
+        self.suspended.load(Ordering::SeqCst) || self.paused.load(Ordering::SeqCst)
+    }
+}
+
+/// Lets go of every shortcut while one is recorded (`true`) or takes them back (`false`).
 pub fn suspend(app: &AppHandle, on: bool) {
+    hold(app, |b| &b.suspended, on);
+}
+
+/// The same for addons; the keys come back once neither holds them.
+pub fn pause(app: &AppHandle, on: bool) {
+    hold(app, |b| &b.paused, on);
+}
+
+fn hold(app: &AppHandle, reason: fn(&Bindings) -> &AtomicBool, on: bool) {
     let bindings = app.state::<Bindings>();
     let _op = bindings.op.lock().unwrap();
-    if bindings.suspended.swap(on, Ordering::SeqCst) == on {
+    let was_off = bindings.off();
+    reason(&bindings).store(on, Ordering::SeqCst);
+    let on = bindings.off();
+    if on == was_off {
         return;
     }
     let generation = bindings.generation.fetch_add(1, Ordering::SeqCst) + 1;
@@ -175,7 +196,7 @@ pub fn hotkeys_suspend(app: AppHandle, suspended: bool) {
 #[tauri::command]
 pub fn hotkeys_busy(app: AppHandle) -> Vec<Action> {
     let bindings = app.state::<Bindings>();
-    if bindings.suspended.load(Ordering::SeqCst) {
+    if bindings.off() {
         return Vec::new();
     }
     let shortcuts = app.global_shortcut();

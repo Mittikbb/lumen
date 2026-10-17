@@ -1,5 +1,6 @@
 // Modules built on Windows APIs have a macOS twin in `macos/` with the same
 // commands and functions, swapped in by `path`; the rest is shared.
+mod addons;
 mod audio;
 #[cfg_attr(target_os = "macos", path = "macos/bluetooth.rs")]
 mod bluetooth;
@@ -51,6 +52,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(shelf::on_drop)
+        .register_uri_scheme_protocol(addons::SCHEME, addons::protocol)
         .manage(overlay::HitRegion::default())
         .manage(overlay::Focus::default())
         .manage(overlay::AnchorState::default())
@@ -65,6 +67,7 @@ pub fn run() {
         .manage(discord::Discord::default())
         .manage(updates::Updates::default())
         .manage(downloads::Downloads::default())
+        .manage(addons::Addons::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
@@ -122,6 +125,16 @@ pub fn run() {
             hotkeys::hotkeys_busy,
             downloads::downloads_reveal,
             games::games_preview,
+            addons::addons_list,
+            addons::addons_open_folder,
+            addons::addons_storage_get,
+            addons::addons_storage_set,
+            addons::addons_copy,
+            addons::addons_fetch,
+            addons::addons_watch_front,
+            addons::addons_front,
+            addons::addons_pause_hotkeys,
+            addons::addons_terminal,
         ])
         .setup(|app| {
             let window = app
@@ -147,6 +160,7 @@ pub fn run() {
             downloads::spawn_watcher(app.handle().clone());
             keyboard::spawn_watcher(app.handle().clone());
             bluetooth::spawn_watcher(app.handle().clone());
+            addons::init(app.handle());
 
             Ok(())
         })

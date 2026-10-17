@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../island/env";
 import type { City } from "../weather/useWeather";
+import type { AddonPrefs } from "../addons/types";
 
 export type GlowLevel = "off" | "soft" | "normal" | "bright";
 export type Accent = "sunset" | "rose" | "violet" | "midnight" | "ocean" | "mint" | "ice" | "custom";
@@ -250,6 +251,8 @@ export interface Settings {
   /** `stats`: a starting game pops the island out with its FPS and the PC's load; off by default. */
   games: { stats: boolean };
   advanced: AdvancedPrefs;
+  /** Third-party addons: which are on, what they may do, their own settings. */
+  addons: AddonPrefs;
 }
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends unknown[] | null ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -325,6 +328,7 @@ export const DEFAULT_SETTINGS: Settings = {
     codeBorderColor: "code",
     dropletGlassBlur: true,
   },
+  addons: { enabled: {}, config: {} },
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

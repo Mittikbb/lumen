@@ -15,6 +15,8 @@ import { isTauri } from "../island/env";
 import { formatShortcut, Hotkeys, openSettings, SearchEngine, CodeBorderColor } from "../settings/useSettings";
 import { ENGINES } from "./engines";
 import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
+import { AddonResults, prefixOwner, selectAddonResult, useAddonSearch } from "../addons/host";
+import { AddonIcon } from "../addons/AddonPanel";
 
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
@@ -67,6 +69,7 @@ function buildResults(
   engine: SearchEngine,
   maxApps: number,
   lookup: boolean,
+  addons: AddonResults[],
 ): Result[] {
   const q = query.trim();
   const out: Result[] = [];
@@ -77,6 +80,11 @@ function buildResults(
     }
     return out;
   }
+
+  // An addon owns queries with its prefix ("-ipconfig"): only its answers,
+  // so Enter can't fall through to a web search while it's still thinking.
+  const owner = prefixOwner(q);
+  if (owner) return addonRows(addons.filter((r) => r.addon.id === owner.id));
 
   // Screen capture by keyword: "скрин", "screenshot", "текст", "ocr"...
   const lower = q.toLowerCase();
@@ -226,6 +234,10 @@ function buildResults(
       );
   }
 
+  // Answers from addons, after the apps: they arrive a moment later, so the
+  // first results don't move under the cursor.
+  if (!isHttpQuery) out.push(...addonRows(addons));
+
   if (URL_LIKE.test(q)) {
     const url = /^https?:\/\//i.test(q) ? q : `https://${q}`;
     out.push({ key: "url", icon: ICONS.link, title: `Открыть ${q}`, hint: "Сайт", run: () => launcher.openUrl(url) });
@@ -250,6 +262,18 @@ function buildResults(
   });
 
   return out;
+}
+
+function addonRows(addons: AddonResults[]): Result[] {
+  return addons.flatMap(({ addon, items }) =>
+    items.map((item) => ({
+      key: `addon:${addon.id}:${item.id}`,
+      icon: <AddonIcon addon={addon} icon={item.icon} />,
+      title: item.title,
+      hint: item.hint ? `${item.hint} · ${addon.name}` : addon.name,
+      run: () => selectAddonResult(addon, item),
+    })),
+  );
 }
 
 function DropletCard({
@@ -420,9 +444,10 @@ export function LauncherPanel({
     onDetailChange?.(item);
   };
 
+  const addonResults = useAddonSearch(query);
   const results = useMemo(
-    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup),
-    [query, apps, ai, hotkeys, engine, maxApps, lookup],
+    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults),
+    [query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults],
   );
 
   // Fresh, focused search box every time the launcher opens.
