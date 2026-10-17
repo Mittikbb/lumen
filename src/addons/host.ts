@@ -51,6 +51,8 @@ const SEARCH_ITEMS = 8;
 /** At most one notice per addon this often. */
 const NOTICE_GAP_MS = 2000;
 const TEXT_MAX = 200;
+/** A command for the terminal: short enough to show whole in its row. */
+const COMMAND_MAX = 300;
 
 const frames = new Map<string, Frame>();
 const views = new Map<string, unknown>();
@@ -243,13 +245,16 @@ export interface AddonResults {
 /** Asks every searching addon about `query`; each answer arrives on its own. */
 export function searchAddons(query: string, onResults: (results: AddonResults) => void): () => void {
   let alive = true;
+  const owner = prefixOwner(query);
   for (const frame of frames.values()) {
     if (!frame.addon.search || !frame.ready) continue;
+    // Commands only on queries the addon owns by its prefix: what the user typed for it.
+    const commands = owner?.id === frame.addon.id;
     const id = ++requestSeq;
     const timeout = setTimeout(() => requests.delete(id), SEARCH_TIMEOUT_MS);
     requests.set(id, (value) => {
       clearTimeout(timeout);
-      if (alive && Array.isArray(value)) onResults({ addon: frame.addon, items: cleanItems(value) });
+      if (alive && Array.isArray(value)) onResults({ addon: frame.addon, items: cleanItems(value, commands) });
     });
     post(frame, { request: id, method: "search", args: [query] });
   }
@@ -293,20 +298,29 @@ export function useAddonSearch(query: string): AddonResults[] {
   return found.query === q ? found.results : [];
 }
 
-function cleanItems(raw: unknown[]): SearchItem[] {
+/** A command that can run: one line, short enough to show whole. */
+const command = (v: unknown) =>
+  typeof v === "string" && v.trim() && v.length <= COMMAND_MAX && !/[\r\n]/.test(v) ? v.trim() : undefined;
+
+function cleanItems(raw: unknown[], commands: boolean): SearchItem[] {
   return raw
     .filter((i): i is Record<string, unknown> => !!i && typeof i === "object" && "title" in i)
     .slice(0, SEARCH_ITEMS)
-    .map((i, n) => ({
-      id: text(i.id ?? n, 100),
-      title: text(i.title),
-      hint: i.hint == null ? undefined : text(i.hint),
-      icon: typeof i.icon === "string" ? i.icon : undefined,
-      copy: typeof i.copy === "string" ? i.copy.slice(0, 100_000) : undefined,
-      open: typeof i.open === "string" ? i.open : undefined,
-      terminal: typeof i.terminal === "string" && i.terminal.trim() && !/[\r\n]/.test(i.terminal) ? i.terminal.slice(0, 8000) : undefined,
-      shell: typeof i.shell === "string" ? i.shell : undefined,
-    }));
+    .map((i, n) => {
+      const terminal = commands ? command(i.terminal) : undefined;
+      return {
+        id: text(i.id ?? n, 100),
+        // A row that runs a command shows that very command, whatever the addon
+        // called it, with runs of spaces squeezed so nothing hides past the edge.
+        title: terminal ? terminal.replace(/\s+/g, " ") : text(i.title),
+        hint: i.hint == null ? undefined : text(i.hint),
+        icon: typeof i.icon === "string" ? i.icon : undefined,
+        copy: typeof i.copy === "string" ? i.copy.slice(0, 100_000) : undefined,
+        open: typeof i.open === "string" ? i.open : undefined,
+        terminal,
+        shell: typeof i.shell === "string" ? i.shell : undefined,
+      };
+    });
 }
 
 /** Enter on an addon's result: copy, open, or tell the addon. */

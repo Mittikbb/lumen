@@ -163,7 +163,7 @@ lumen.search.provide(async (query) => [
   { id: "1", title: "Результат", hint: "Подпись", icon: "⭐" },
   { id: "2", title: "Скопировать это", copy: "текст" },        // нужно clipboard
   { id: "3", title: "Открыть сайт", open: "https://example.com" }, // нужно links
-  { id: "4", title: "ipconfig", terminal: "ipconfig", shell: "cmd" }, // нужно terminal
+  { id: "4", title: "ipconfig", terminal: "ipconfig", shell: "cmd" }, // нужно terminal и prefix
 ]);
 
 lumen.search.onSelect((id) => {
@@ -182,7 +182,9 @@ lumen.search.onSelect((id) => {
 обычная консоль, как настроено в системе; на macOS — Терминал), показывает команду, выполняет её
 и оставляет окно открытым. `shell` на Windows: `powershell` (по умолчанию), `pwsh` или `cmd`.
 Запустить команду можно только так — выбором результата, без участия пользователя аддон
-ничего не запустит.
+ничего не запустит. `terminal` работает только у аддона со своим префиксом и только на запросах
+с этим префиксом; строка результата показывает саму команду (а не `title`), и команда должна
+быть в одну строку, не длиннее 300 символов.
 
 ### Остров
 

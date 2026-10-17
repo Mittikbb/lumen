@@ -248,6 +248,10 @@ fn load(dir: &Path) -> AddonInfo {
         Ok(search) => search,
         Err(e) => return broken(e),
     };
+    // Commands come only from queries typed for the addon, after its prefix.
+    if search_prefix.is_none() && manifest.permissions.iter().any(|p| p == "terminal") {
+        return broken("Разрешению terminal нужен свой префикс: \"search\": { \"prefix\": \"…\" }".into());
+    }
     AddonInfo {
         id: manifest.id,
         folder,
@@ -559,7 +563,8 @@ pub fn addons_terminal(app: AppHandle, id: String, command: String, shell: Optio
         return Err("permission \"terminal\" is not granted".into());
     }
     let command = command.trim();
-    if command.is_empty() || command.len() > 8000 || command.contains(['\r', '\n']) {
+    // As long as the island shows whole in the result's row (host.ts COMMAND_MAX).
+    if command.is_empty() || command.chars().count() > 300 || command.contains(['\r', '\n']) {
         return Err("bad command".into());
     }
     terminal::open(command, shell.as_deref().unwrap_or("powershell"))
