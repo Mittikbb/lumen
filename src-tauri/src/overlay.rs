@@ -6,7 +6,7 @@
 use std::{
     sync::{
         Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
     time::Duration,
@@ -94,6 +94,26 @@ static HIDDEN: AtomicBool = AtomicBool::new(false);
 
 pub fn hidden() -> bool {
     HIDDEN.load(Ordering::Relaxed)
+}
+
+/// The island page's zoom (bits of an f64): how many screen points one CSS
+/// px takes. Only the "Масштаб" setting on macOS changes it from 1.
+static ZOOM: AtomicU64 = AtomicU64::new(0x3ff0_0000_0000_0000);
+
+fn zoom() -> f64 {
+    f64::from_bits(ZOOM.load(Ordering::Relaxed))
+}
+
+/// The zoom the settings ask for: the island's size on macOS, where a small
+/// screen otherwise makes it look big.
+#[cfg(target_os = "macos")]
+fn wanted_zoom(settings: &settings::Settings) -> f64 {
+    settings.display.scale.clamp(settings::MIN_SCALE, settings::MAX_SCALE)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn wanted_zoom(_settings: &settings::Settings) -> f64 {
+    1.0
 }
 
 #[tauri::command]
@@ -236,17 +256,24 @@ fn place(window: &WebviewWindow) -> tauri::Result<()> {
     let origin = monitor.position();
     let screen = monitor.size().to_logical::<f64>(scale);
     let win = window.outer_size()?.to_logical::<f64>(window.scale_factor()?);
+    let zoom = wanted_zoom(&settings);
+    if zoom != self::zoom() {
+        window.set_zoom(zoom)?;
+        ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
+    }
+    // Sizes from the page are CSS px; the window is placed in points.
+    let glow_room = GLOW_ROOM * zoom;
 
     let (left, top, anchor) = match settings.display.position {
         None => ((screen.width - win.width) / 2.0, 0.0, None),
         Some(spot) => {
-            let half = widest_island(&settings) / 2.0 + EDGE;
+            let half = widest_island(&settings) * zoom / 2.0 + EDGE;
             let x = fit(spot.x * screen.width, half, screen.width - half);
             // Low enough that the tallest panel still fits in the window.
-            let y = fit(spot.y, 0.0, screen.height - (win.height - GLOW_ROOM));
+            let y = fit(spot.y, 0.0, screen.height - (win.height - glow_room));
             let left = fit(x - win.width / 2.0, 0.0, screen.width - win.width);
-            let top = fit(y - GLOW_ROOM, 0.0, screen.height - win.height);
-            (left, top, Some(Anchor { x: x - left, y: y - top }))
+            let top = fit(y - glow_room, 0.0, screen.height - win.height);
+            (left, top, Some(Anchor { x: (x - left) / zoom, y: (y - top) / zoom }))
         }
     };
 
@@ -299,7 +326,7 @@ pub fn overlay_drag_start(app: AppHandle) {
 #[tauri::command]
 pub fn overlay_drag_by(app: AppHandle, dx: f64, dy: f64) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("no island window")?;
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())? * zoom();
     let at = window.outer_position().map_err(|e| e.to_string())?;
     window
         .set_position(PhysicalPosition::new(
@@ -317,6 +344,7 @@ pub fn overlay_drag_end(app: AppHandle, x: f64, y: f64) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("no island window")?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let at = window.outer_position().map_err(|e| e.to_string())?;
+    let (x, y) = (x * zoom(), y * zoom());
     let (px, py) = (at.x as f64 + x * scale, at.y as f64 + y * scale);
 
     // The monitor under the island, or the closest one if it's in a gap.
@@ -462,7 +490,11 @@ impl Pointer {
         let (left, top) = self.origin?;
         // AppKit counts from the bottom-left of the main display, upwards.
         let cursor = NSEvent::mouseLocation();
-        Some((cursor.x - left, self.screen_height - cursor.y - top))
+        let zoom = zoom();
+        Some((
+            (cursor.x - left) / zoom,
+            (self.screen_height - cursor.y - top) / zoom,
+        ))
     }
 }
 

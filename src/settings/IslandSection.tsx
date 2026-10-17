@@ -43,6 +43,19 @@ export function IslandSection({ settings }: { settings: Settings }) {
     <>
       <Heading>Форма</Heading>
       <div className="st-card">
+        {/* The island at its designed size can look big on a small Mac screen. */}
+        {isMac && (
+          <Row title="Масштаб" hint="Весь остров целиком, пропорционально">
+            <Slider
+              value={Math.round((display.scale ?? 1) * 100)}
+              min={50}
+              max={150}
+              step={5}
+              format={(v) => `${v}%`}
+              onChange={(v) => updateSettings({ display: { scale: v / 100 } })}
+            />
+          </Row>
+        )}
         <Row title="Ширина в покое">
           <Slider value={island.width} min={120} max={340} step={4} format={px} onChange={(width) => shape({ width })} />
         </Row>
