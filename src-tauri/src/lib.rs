@@ -2,7 +2,7 @@
 // or swapped for a stand-in from `macos/` with the same commands, which
 // answer "nothing here" or "unsupported" so the frontend keeps working.
 mod audio;
-#[cfg(windows)]
+#[cfg_attr(target_os = "macos", path = "macos/bluetooth.rs")]
 mod bluetooth;
 mod browser;
 #[cfg_attr(target_os = "macos", path = "macos/capture.rs")]
@@ -147,7 +147,6 @@ pub fn run() {
             updates::spawn_checker(app.handle().clone());
             downloads::spawn_watcher(app.handle().clone());
             keyboard::spawn_watcher(app.handle().clone());
-            #[cfg(windows)]
             bluetooth::spawn_watcher(app.handle().clone());
 
             Ok(())
