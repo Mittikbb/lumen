@@ -1,25 +1,40 @@
+// Modules built on Windows APIs have a macOS twin in `macos/` with the same
+// commands and functions, swapped in by `path`; the rest is shared.
 mod audio;
+#[cfg_attr(target_os = "macos", path = "macos/bluetooth.rs")]
 mod bluetooth;
 mod browser;
+#[cfg_attr(target_os = "macos", path = "macos/capture.rs")]
 mod capture;
 mod clipboard;
 mod discord;
 mod downloads;
+#[cfg(target_os = "macos")]
+#[path = "macos/front.rs"]
+mod front;
+#[cfg_attr(target_os = "macos", path = "macos/games.rs")]
 mod games;
 mod hotkeys;
+#[cfg_attr(target_os = "macos", path = "macos/keyboard.rs")]
 mod keyboard;
 mod launcher;
+#[cfg_attr(target_os = "macos", path = "macos/media.rs")]
 mod media;
 mod net;
 mod overlay;
 mod pixels;
+// Only Windows has one; macOS reads the same settings elsewhere.
+#[cfg(windows)]
 mod registry;
+#[cfg_attr(target_os = "macos", path = "macos/secret.rs")]
 mod secret;
 mod settings;
 mod shelf;
+#[cfg_attr(target_os = "macos", path = "macos/shell_image.rs")]
 mod shell_image;
 mod tray;
 mod updates;
+#[cfg_attr(target_os = "macos", path = "macos/volume.rs")]
 mod volume;
 
 use tauri::Manager;
@@ -114,6 +129,9 @@ pub fn run() {
                 .expect("main window is missing");
 
             settings::init(app.handle());
+            // No Dock icon: the island and the menu bar icon are Lumen's handles.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             overlay::dock_to_top(&window)?;
             overlay::spawn_cursor_tracker(app.handle().clone());
             overlay::spawn_fullscreen_watch(app.handle().clone());

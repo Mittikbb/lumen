@@ -37,6 +37,11 @@ pub fn open(stored: &str) -> Option<String> {
     String::from_utf8(plain).ok()
 }
 
+/// Whether a stored value is sealed, so an old plain one gets sealed now.
+pub fn is_sealed(stored: &str) -> bool {
+    stored.starts_with(PREFIX)
+}
+
 /// Bytes sealed as they are, for files.
 pub fn seal_bytes(plain: &[u8]) -> Option<Vec<u8>> {
     crypt(plain, true)

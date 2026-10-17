@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into Lumen.app's Info.plist by the Tauri bundler (macOS only). -->
+<plist version="1.0">
+<dict>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Lumen слушает, что играет в системе, чтобы остров светился и танцевал в такт музыке.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Lumen показывает на острове, когда подключаются и отключаются Bluetooth-устройства, и их заряд.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Lumen меняет громкость Spotify и Музыки прямо с острова.</string>
+</dict>
+</plist>

@@ -1,5 +1,5 @@
-//! Tray icon: the only visible handle on Lumen besides the island itself, with
-//! settings, the "start with Windows" toggle and quit.
+//! Tray icon (the menu bar on macOS): the only visible handle on Lumen besides
+//! the island itself, with settings, the "start with Windows" toggle and quit.
 
 use std::fs;
 
@@ -10,9 +10,12 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::{registry, settings};
+#[cfg(windows)]
+use crate::registry;
+use crate::settings;
 
 /// Where Windows keeps per-user autostart entries.
+#[cfg(windows)]
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 /// Marks that autostart was set up once, so a user's "off" choice sticks.
@@ -31,7 +34,11 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         app,
         "autostart",
         if release {
-            "Запускать вместе с Windows"
+            if cfg!(target_os = "macos") {
+                "Открывать при входе в систему"
+            } else {
+                "Запускать вместе с Windows"
+            }
         } else {
             "Автозапуск (только в установленной версии)"
         },
@@ -123,7 +130,14 @@ fn prepare_autostart(app: &AppHandle) {
     }
 }
 
+/// The login item on macOS names the app bundle, which moves as a whole.
+#[cfg(not(windows))]
+fn autostart_is_stale(_app: &AppHandle) -> bool {
+    false
+}
+
 /// Whether the autostart entry exists but starts some other exe.
+#[cfg(windows)]
 fn autostart_is_stale(app: &AppHandle) -> bool {
     let Ok(exe) = std::env::current_exe() else {
         return false;

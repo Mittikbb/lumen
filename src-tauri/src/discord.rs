@@ -1,4 +1,4 @@
-//! Discord over its local RPC pipe: the voice channel you're in shows on the
+//! Discord over its local RPC pipe (a Unix socket on macOS): the voice channel you're in shows on the
 //! island (who's there, who's talking, mute and deafen), and the track that's
 //! playing becomes your Discord status.
 //!
@@ -7,11 +7,17 @@
 //! in discord-token.json. A synchronous pipe can't be read and written at the
 //! same time, so one thread does all the I/O and polls for incoming frames.
 
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
+#[cfg(windows)]
+use std::{
+    fs::{File, OpenOptions},
+    os::windows::io::AsRawHandle,
+};
 use std::{
     collections::VecDeque,
-    fs::{self, File, OpenOptions},
+    fs,
     io::{Read, Write},
-    os::windows::io::AsRawHandle,
     path::PathBuf,
     sync::{
         Mutex,
@@ -25,6 +31,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, Manager, State};
+#[cfg(windows)]
 use windows::Win32::{Foundation::HANDLE, System::Pipes::PeekNamedPipe};
 
 use crate::{
@@ -220,13 +227,17 @@ fn run(app: AppHandle, generation: u64, prefs: DiscordPrefs, rx: Receiver<Comman
 }
 
 struct Pipe {
+    #[cfg(windows)]
     file: File,
+    #[cfg(unix)]
+    file: UnixStream,
     nonce: u64,
     /// Events read while waiting for a reply, handled afterwards.
     backlog: VecDeque<Value>,
 }
 
 impl Pipe {
+    #[cfg(windows)]
     fn connect() -> Result<Self, String> {
         let mut permission_denied = false;
         for i in 0..10 {
@@ -261,6 +272,47 @@ impl Pipe {
         self.file.write_all(&frame).map_err(closed)
     }
 
+    /// Discord listens on `discord-ipc-0..9` in the temporary folder.
+    #[cfg(unix)]
+    fn connect() -> Result<Self, String> {
+        let dir = std::env::var_os("TMPDIR").map_or_else(std::env::temp_dir, PathBuf::from);
+        for i in 0..10 {
+            if let Ok(file) = UnixStream::connect(dir.join(format!("discord-ipc-{i}"))) {
+                return Ok(Self {
+                    file,
+                    nonce: 0,
+                    backlog: VecDeque::new(),
+                });
+            }
+        }
+        Err(NOT_RUNNING.into())
+    }
+
+    /// Whether a frame has arrived: a peek at the socket that doesn't wait.
+    #[cfg(unix)]
+    fn pending(&self) -> Result<bool, String> {
+        use std::{
+            ffi::{c_int, c_void},
+            os::fd::AsRawFd,
+        };
+        unsafe extern "C" {
+            fn recv(socket: c_int, buf: *mut c_void, len: usize, flags: c_int) -> isize;
+        }
+        // <sys/socket.h> on macOS.
+        const MSG_PEEK: c_int = 0x2;
+        const MSG_DONTWAIT: c_int = 0x80;
+
+        let mut byte = 0u8;
+        let read = unsafe { recv(self.file.as_raw_fd(), (&raw mut byte).cast(), 1, MSG_PEEK | MSG_DONTWAIT) };
+        match read {
+            1.. => Ok(true),
+            0 => Err("Discord закрыл соединение".into()),
+            _ if std::io::Error::last_os_error().kind() == std::io::ErrorKind::WouldBlock => Ok(false),
+            _ => Err("Discord закрыл соединение".into()),
+        }
+    }
+
+    #[cfg(windows)]
     fn pending(&self) -> Result<bool, String> {
         let mut available = 0u32;
         unsafe {

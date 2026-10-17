@@ -16,6 +16,7 @@ use std::{
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
+#[cfg(windows)]
 use windows::Win32::{
     System::Com::CoTaskMemFree,
     UI::Shell::{FOLDERID_Downloads, KNOWN_FOLDER_FLAG, SHGetKnownFolderPath},
@@ -171,6 +172,12 @@ fn final_path(partial: &Path) -> Option<PathBuf> {
     Some(partial.with_file_name(stem.as_ref()))
 }
 
+#[cfg(target_os = "macos")]
+fn downloads_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Downloads"))
+}
+
+#[cfg(windows)]
 fn downloads_dir() -> Option<PathBuf> {
     unsafe {
         let path = SHGetKnownFolderPath(&FOLDERID_Downloads, KNOWN_FOLDER_FLAG(0), None).ok()?;

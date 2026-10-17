@@ -13,8 +13,12 @@ const MAX_PIXELS: u64 = 50_000_000;
 /// Thumbnail bounding box shown in the history list.
 const THUMB: (u32, u32) = (192, 112);
 
+// The clipboard's DIB format exists on Windows only.
+#[cfg(windows)]
 const BI_RGB: u32 = 0;
+#[cfg(windows)]
 const BI_BITFIELDS: u32 = 3;
+#[cfg(windows)]
 const HEADER_SIZE: usize = 40;
 
 pub fn decode_png(bytes: &[u8]) -> Option<RgbaImage> {
@@ -55,6 +59,7 @@ pub fn hash(image: &RgbaImage) -> u64 {
 
 /// Parses a CF_DIB blob (BITMAPINFOHEADER or a V4/V5 header, then pixels).
 /// Handles the 24- and 32-bit uncompressed layouts screenshots and apps use.
+#[cfg(windows)]
 pub fn from_dib(dib: &[u8]) -> Option<RgbaImage> {
     let u32_at = |o: usize| Some(u32::from_le_bytes(dib.get(o..o + 4)?.try_into().ok()?));
     let header_size = u32_at(0)? as usize;
@@ -107,6 +112,7 @@ pub fn from_dib(dib: &[u8]) -> Option<RgbaImage> {
 }
 
 /// Builds a 32-bit bottom-up CF_DIB blob.
+#[cfg(windows)]
 pub fn to_dib(image: &RgbaImage) -> Vec<u8> {
     let (w, h) = image.dimensions();
     let pixel_bytes = w as usize * h as usize * 4;
@@ -128,7 +134,8 @@ pub fn to_dib(image: &RgbaImage) -> Vec<u8> {
     out
 }
 
-#[cfg(test)]
+// The tests cover the DIB format, which only Windows has.
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 

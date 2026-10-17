@@ -10,8 +10,8 @@ use windows::{
         System::{
             DataExchange::{
                 CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardOwner,
-                IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
-                SetClipboardData,
+                GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
+                RegisterClipboardFormatW, SetClipboardData,
             },
             Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock},
             Ole::{CF_DIB, CF_UNICODETEXT},
@@ -36,6 +36,11 @@ use crate::pixels as img;
 pub enum Content {
     Text(String),
     Image(RgbaImage),
+}
+
+/// Goes up whenever anything is copied.
+pub fn sequence() -> u32 {
+    unsafe { GetClipboardSequenceNumber() }
 }
 
 /// Reads what's on the clipboard, unless it's empty or marked private.

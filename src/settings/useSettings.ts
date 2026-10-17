@@ -156,6 +156,8 @@ export interface DisplayPrefs {
   hideMaximized: boolean;
   /** Where the island was dragged (Ctrl + drag); null keeps it centred at the top. */
   position: { x: number; y: number } | null;
+  /** The island's size as a whole, 0.5–1.5; macOS only. */
+  scale: number;
 }
 
 export interface ClipboardPrefs {
@@ -305,7 +307,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   notices: { copy: true, shelf: true, rain: true, bluetooth: true, layout: true, caps: true, duration: 1 },
   motion: { speed: "normal", bounce: "normal", blur: true, copyFlash: true, trackBump: true, reduced: false },
-  display: { monitor: null, hideFullscreen: true, hideMaximized: false, position: null },
+  display: { monitor: null, hideFullscreen: true, hideMaximized: false, position: null, scale: 1 },
   clipboard: { limit: 60, keepDays: 0, ignore: [] },
   shelf: { limit: 40 },
   weather: { units: "c", rainChance: 60, refreshMinutes: 15 },

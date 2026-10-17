@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { isTauri } from "../island/env";
+import { isMac, isTauri } from "../island/env";
 import { Heading, Row, Segmented, Slider, Toggle } from "./controls";
 import { CollapsedPrefs, IslandPrefs, NightPrefs, NoticePrefs, Settings, sparksOn, updateSettings } from "./useSettings";
 
@@ -43,6 +43,19 @@ export function IslandSection({ settings }: { settings: Settings }) {
     <>
       <Heading>Форма</Heading>
       <div className="st-card">
+        {/* The island at its designed size can look big on a small Mac screen. */}
+        {isMac && (
+          <Row title="Масштаб" hint="Весь остров целиком, пропорционально">
+            <Slider
+              value={Math.round((display.scale ?? 1) * 100)}
+              min={50}
+              max={150}
+              step={5}
+              format={(v) => `${v}%`}
+              onChange={(v) => updateSettings({ display: { scale: v / 100 } })}
+            />
+          </Row>
+        )}
         <Row title="Ширина в покое">
           <Slider value={island.width} min={120} max={340} step={4} format={px} onChange={(width) => shape({ width })} />
         </Row>
@@ -99,7 +112,14 @@ export function IslandSection({ settings }: { settings: Settings }) {
             onChange={(hideFullscreen) => updateSettings({ display: { hideFullscreen } })}
           />
         </Row>
-        <Row title="FPS и нагрузка в играх" hint="Когда запускается игра, остров выезжает на пару секунд с FPS, CPU, GPU и памятью и уезжает обратно">
+        <Row
+          title={isMac ? "Нагрузка в играх" : "FPS и нагрузка в играх"}
+          hint={
+            isMac
+              ? "Когда запускается игра, остров выезжает на пару секунд с CPU, GPU и памятью и уезжает обратно"
+              : "Когда запускается игра, остров выезжает на пару секунд с FPS, CPU, GPU и памятью и уезжает обратно"
+          }
+        >
           <span className="st-colors">
             {settings.games.stats && isTauri && (
               <button className="st-button quiet" onClick={() => invoke("games_preview")}>

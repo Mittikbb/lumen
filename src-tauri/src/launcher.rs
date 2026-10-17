@@ -5,9 +5,10 @@
 //! the launcher is open it temporarily accepts focus to receive typing, and
 //! hands focus back to the previous window when closed.
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{
     collections::HashMap,
-    os::windows::process::CommandExt,
     process::Command,
     sync::Mutex,
     thread,
@@ -17,8 +18,9 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::{browser, clipboard::win as clipboard, overlay, settings, shell_image};
+use crate::{browser, clipboard::sys as clipboard, overlay, settings, shell_image};
 
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The app list is refreshed on open when older than this.
 const APPS_TTL: Duration = Duration::from_secs(300);
@@ -31,6 +33,7 @@ pub struct App {
     #[serde(rename(deserialize = "Name"))]
     name: String,
     /// Start menu AppID: an AUMID for Store apps, a path for classic ones.
+    /// On macOS the path of the `.app` bundle.
     #[serde(rename(deserialize = "AppID"))]
     id: String,
 }
@@ -130,11 +133,21 @@ pub fn launcher_run(app: AppHandle, id: String) -> Result<(), String> {
         return Err("not a Start menu app".into());
     }
     close(&app, false);
-    Command::new("explorer.exe")
-        .arg(format!("shell:AppsFolder\\{id}"))
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    start_app(&id).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+#[cfg(windows)]
+fn start_app(id: &str) -> Command {
+    let mut command = Command::new("explorer.exe");
+    command.arg(format!("shell:AppsFolder\\{id}"));
+    command
+}
+
+#[cfg(target_os = "macos")]
+fn start_app(id: &str) -> Command {
+    let mut command = Command::new("/usr/bin/open");
+    command.arg(id);
+    command
 }
 
 #[tauri::command]
@@ -201,23 +214,9 @@ fn close(app: &AppHandle, restore_focus: bool) {
     overlay::release_focus(app, restore_focus);
 }
 
-/// Loads the Start menu app list (classic and Store apps) via PowerShell.
+/// Loads the app list and warms the icon cache.
 fn refresh_apps(app: &AppHandle) {
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-StartApps | ConvertTo-Json -Compress",
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-    let Ok(output) = output else { return };
-    let json = String::from_utf8_lossy(&output.stdout);
-    // A single app comes back as an object rather than an array.
-    let parsed = serde_json::from_str::<Vec<App>>(&json)
-        .or_else(|_| serde_json::from_str::<App>(&json).map(|a| vec![a]));
-    let Ok(mut apps) = parsed else { return };
+    let Some(mut apps) = installed_apps() else { return };
 
     apps.retain(|a| !is_noise(&a.name));
     apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -238,6 +237,66 @@ fn refresh_apps(app: &AppHandle) {
     }
 }
 
+/// The Start menu app list (classic and Store apps), via PowerShell.
+#[cfg(windows)]
+fn installed_apps() -> Option<Vec<App>> {
+    let output = Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-StartApps | ConvertTo-Json -Compress",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    let json = String::from_utf8_lossy(&output.stdout);
+    // A single app comes back as an object rather than an array.
+    serde_json::from_str::<Vec<App>>(&json)
+        .or_else(|_| serde_json::from_str::<App>(&json).map(|a| vec![a]))
+        .ok()
+}
+
+/// The `.app` bundles in the Applications folders (and one level of
+/// subfolders, where suites like Adobe's or Microsoft's keep theirs).
+#[cfg(target_os = "macos")]
+fn installed_apps() -> Option<Vec<App>> {
+    use std::path::{Path, PathBuf};
+
+    fn scan(dir: &Path, depth: u8, apps: &mut Vec<App>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            match name.strip_suffix(".app") {
+                Some(stem) => apps.push(App {
+                    name: stem.to_string(),
+                    id: path.to_string_lossy().into_owned(),
+                }),
+                None if depth > 0 && path.is_dir() => scan(&path, depth - 1, apps),
+                None => {}
+            }
+        }
+    }
+
+    let mut dirs = vec![
+        PathBuf::from("/Applications"),
+        PathBuf::from("/System/Applications"),
+        PathBuf::from("/System/Applications/Utilities"),
+    ];
+    if let Some(home) = std::env::var_os("HOME") {
+        dirs.push(PathBuf::from(home).join("Applications"));
+    }
+    let mut apps = Vec::new();
+    for dir in dirs {
+        scan(&dir, 1, &mut apps);
+    }
+    Some(apps)
+}
+
 /// Uninstallers, docs and links that clutter app search.
 fn is_noise(name: &str) -> bool {
     let n = name.to_lowercase();
@@ -252,4 +311,21 @@ fn is_noise(name: &str) -> bool {
     ]
     .iter()
     .any(|w| n.contains(w))
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_mac_apps_with_icons() {
+        let apps = installed_apps().unwrap();
+        let calculator = apps
+            .iter()
+            .find(|a| a.name == "Calculator")
+            .expect("Calculator.app ships with macOS");
+        assert!(calculator.id.ends_with("/Calculator.app"));
+        let icon = shell_image::app_icon(&calculator.id).expect("an app has an icon");
+        assert!(icon.starts_with("data:image/png;base64,"));
+    }
 }

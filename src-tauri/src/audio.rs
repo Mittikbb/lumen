@@ -1,6 +1,7 @@
-//! Audio-reactive levels. Captures whatever the system is playing (WASAPI
-//! loopback on the default output device), splits it into frequency bands and
-//! streams normalised 0..1 levels to the UI ~60 times a second.
+//! Audio-reactive levels. Captures whatever the system is playing (loopback on
+//! the default output device: WASAPI on Windows, a Core Audio process tap on
+//! macOS 14.2+), splits it into frequency bands and streams normalised 0..1
+//! levels to the UI ~60 times a second.
 //!
 //! Two paths with different latency needs:
 //! - the equaliser bars come from an FFT over ~43 ms of audio (needs the
