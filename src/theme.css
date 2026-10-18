@@ -352,6 +352,9 @@ body,
   height: 20px;
   flex: none;
   margin-right: -4px;
+  /* The trace (and its glow) fades in from the left and out to the right. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent);
 }
 
 /* "Частицы": sparks off the island on the beat, behind everything else. */

@@ -14,6 +14,7 @@ import { AddonsSection } from "./AddonsSection";
 import { DiscordSection } from "./DiscordSection";
 import { AdvancedSection } from "./AdvancedSection";
 import { AboutSection } from "./AboutSection";
+import { useAutostart } from "./autostart";
 import {
   DEFAULT_SETTINGS,
   formatShortcut,
@@ -190,9 +191,9 @@ function GeneralSection({ settings }: { settings: Settings }) {
           hint={autostart === null ? "Работает только в установленной версии" : "Остров появится сразу после входа"}
         >
           <Toggle
-            on={!!autostart}
+            on={!!autostart?.on}
             disabled={autostart === null}
-            onChange={(on) => invoke<boolean | null>("settings_set_autostart", { on })}
+            onChange={(on) => invoke("settings_set_autostart", { on })}
           />
         </Row>
       </div>
@@ -299,20 +300,6 @@ function BrowserRow({ chosen }: { chosen: string | null }) {
       </select>
     </Row>
   );
-}
-
-/** Autostart state, live with the tray toggle; null when it can't be changed. */
-function useAutostart(): boolean | null {
-  const [on, setOn] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!isTauri) return;
-    invoke<boolean | null>("settings_autostart").then(setOn);
-    const unlisten = listen<boolean>("lumen://autostart", (e) => setOn(e.payload));
-    return () => {
-      unlisten.then((off) => off());
-    };
-  }, []);
-  return on;
 }
 
 /* Клавиши */

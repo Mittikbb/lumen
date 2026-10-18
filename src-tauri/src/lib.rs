@@ -19,6 +19,8 @@ mod hotkeys;
 #[cfg_attr(target_os = "macos", path = "macos/keyboard.rs")]
 mod keyboard;
 mod launcher;
+#[cfg_attr(target_os = "macos", path = "macos/logon_task.rs")]
+mod logon_task;
 mod lookup;
 #[cfg_attr(target_os = "macos", path = "macos/media.rs")]
 mod media;
@@ -115,6 +117,7 @@ pub fn run() {
             settings::settings_update,
             settings::settings_autostart,
             settings::settings_set_autostart,
+            settings::settings_set_autostart_admin,
             settings::settings_open,
             browser::browser_list,
             discord::discord_status,

@@ -25,7 +25,7 @@ use tauri::{
 
 use crate::{discord, hotkeys, overlay, secret, tray};
 
-const WINDOW: &str = "settings";
+pub const WINDOW: &str = "settings";
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -382,14 +382,25 @@ pub fn settings_update(app: AppHandle, patch: Value) -> Result<Settings, String>
 }
 
 /// Autostart state; `None` in dev builds, where it can't be changed.
+/// Async (here and below) since it asks schtasks, and switching the admin
+/// task waits on a UAC prompt.
 #[tauri::command]
-pub fn settings_autostart(app: AppHandle) -> Option<bool> {
-    tray::autostart(&app)
+pub async fn settings_autostart(app: AppHandle) -> Option<tray::Autostart> {
+    blocking(move || tray::autostart(&app)).await
 }
 
 #[tauri::command]
-pub fn settings_set_autostart(app: AppHandle, on: bool) -> Option<bool> {
-    tray::set_autostart(&app, on)
+pub async fn settings_set_autostart(app: AppHandle, on: bool) -> Option<tray::Autostart> {
+    blocking(move || tray::set_autostart(&app, on)).await
+}
+
+#[tauri::command]
+pub async fn settings_set_autostart_admin(app: AppHandle, admin: bool) -> Option<tray::Autostart> {
+    blocking(move || tray::set_autostart_admin(&app, admin)).await
+}
+
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Option<T> + Send + 'static) -> Option<T> {
+    tauri::async_runtime::spawn_blocking(f).await.ok().flatten()
 }
 
 /// Async on purpose: a sync command runs inside the webview's IPC callback,
