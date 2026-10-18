@@ -104,7 +104,15 @@ pub struct Display {
     /// Where the island was dragged on its monitor; `None` keeps it centred
     /// along the top edge.
     pub position: Option<Position>,
+    /// The island's size as a whole (macOS only; 1 is as designed).
+    pub scale: f64,
 }
+
+/// Bounds of `Display::scale`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub const MIN_SCALE: f64 = 0.5;
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub const MAX_SCALE: f64 = 1.5;
 
 impl Default for Display {
     fn default() -> Self {
@@ -113,6 +121,7 @@ impl Default for Display {
             hide_fullscreen: true,
             hide_maximized: false,
             position: None,
+            scale: 1.0,
         }
     }
 }
@@ -123,7 +132,7 @@ impl Default for Display {
 pub struct Position {
     /// Island centre as a share of the monitor width (0 left, 1 right).
     pub x: f64,
-    /// Island top below the monitor's top edge, in CSS px.
+    /// Island top below the monitor's top edge, in points (CSS px at scale 1).
     pub y: f64,
 }
 
@@ -360,6 +369,7 @@ pub fn settings_update(app: AppHandle, patch: Value) -> Result<Settings, String>
     // The expanded size bounds where a dragged island may sit.
     if next.display.monitor != prev.display.monitor
         || next.display.position != prev.display.position
+        || next.display.scale != prev.display.scale
         || next.rest.get("island") != prev.rest.get("island")
     {
         overlay::redock(&app);

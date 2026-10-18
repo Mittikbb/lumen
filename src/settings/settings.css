@@ -50,6 +50,11 @@ html.settings-root #root {
   transition: background 0.15s, color 0.15s;
 }
 
+/* "О Lumen" sits at the foot of the list. */
+.st-nav-item.bottom {
+  margin-top: auto;
+}
+
 .st-nav-item:hover {
   color: var(--island-fg);
   background: rgba(255, 255, 255, 0.05);
@@ -1015,4 +1020,108 @@ html.settings-root #root {
   font: inherit;
   font-size: 12px;
   background: rgba(255, 255, 255, 0.08);
+}
+
+/* Addons */
+.st-addons-empty {
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--island-fg-muted);
+}
+
+.st-addons-empty code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.st-addon-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.st-addon.broken .st-addon-icon {
+  opacity: 0.45;
+}
+
+.st-addon-icon .ad-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 18px;
+}
+
+.st-addon-icon .ad-icon.glyph {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.st-addon-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-addon-version {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--island-fg-muted);
+}
+
+.st-addon-abilities {
+  margin: 0;
+  padding: 0 16px 12px 62px;
+  list-style: none;
+  font-size: 12px;
+  color: var(--island-fg-muted);
+}
+
+.st-addon-abilities li {
+  padding: 2px 0;
+}
+
+.st-addon-abilities li::before {
+  content: "•";
+  margin-right: 8px;
+  color: var(--glow-a);
+}
+
+.st-addon-abilities li.fresh {
+  color: var(--island-fg);
+}
+
+.st-addon-new {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  color: #111;
+  background: #f7c873;
+}
+
+.st-addon-consent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--island-line);
+  font-size: 12px;
+}
+
+.st-addon-settings {
+  border-top: 1px solid var(--island-line);
+}
+
+.st-addon-consent .st-buttons,
+.st-addon-folder .st-buttons {
+  flex: none;
+}
+
+.st-addon-consent .st-button,
+.st-addon-folder .st-button {
+  white-space: nowrap;
 }

@@ -1,0 +1,17 @@
+{
+  "id": "notes",
+  "name": "Заметки",
+  "version": "1.0.0",
+  "lumen": 1,
+  "author": "Lumen",
+  "description": "Короткие заметки на острове и в поиске",
+  "icon": "📝",
+  "main": "main.js",
+  "permissions": ["notify", "clipboard"],
+  "tab": { "label": "Заметки", "height": 290 },
+  "search": true,
+  "settings": [
+    { "key": "confirm", "type": "toggle", "label": "Уведомлять о новой заметке", "default": true },
+    { "key": "limit", "type": "number", "label": "Сколько заметок хранить", "min": 10, "max": 200, "step": 10, "default": 50 }
+  ]
+}

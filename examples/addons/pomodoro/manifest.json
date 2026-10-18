@@ -1,0 +1,16 @@
+{
+  "id": "pomodoro",
+  "name": "Помидор",
+  "version": "1.0.0",
+  "lumen": 1,
+  "author": "Lumen",
+  "description": "Таймер «работа — перерыв» с полоской на свёрнутом острове",
+  "icon": "🍅",
+  "permissions": ["notify"],
+  "tab": { "label": "Помидор", "height": 230 },
+  "search": true,
+  "settings": [
+    { "key": "work", "type": "number", "label": "Работа, минут", "min": 5, "max": 90, "step": 5, "default": 25 },
+    { "key": "rest", "type": "number", "label": "Перерыв, минут", "min": 1, "max": 30, "step": 1, "default": 5 }
+  ]
+}

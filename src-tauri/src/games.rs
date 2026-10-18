@@ -80,7 +80,7 @@ pub fn game_name(pid: u32, title: &str) -> Option<String> {
     Some(if title.is_empty() { exe } else { title.to_string() })
 }
 
-fn exe_stem(pid: u32) -> Option<String> {
+pub(crate) fn exe_stem(pid: u32) -> Option<String> {
     unsafe {
         let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         let mut path = [0u16; 1024];

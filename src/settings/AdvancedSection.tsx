@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { isMac, isTauri } from "../island/env";
+import { LookupCache, refreshLookup } from "../launcher/lookupData";
 import { Heading, Row, Segmented, Toggle } from "./controls";
 import { CodeBorderColor, Settings, updateSettings } from "./useSettings";
 import { GITHUB_REPO_URL } from "../launcher/httpCodes";
@@ -32,25 +35,30 @@ export function AdvancedSection({ settings }: { settings: Settings }) {
 
   return (
     <>
-      <Heading>Запуск</Heading>
-      <div className="st-card">
-        <Row
-          title="Автозапуск от имени администратора"
-          hint={
-            autostart === null
-              ? "Работает только в установленной версии"
-              : !autostart.on
-                ? "Сначала включи «Запускать вместе с Windows» в «Общих»"
-                : "Через Планировщик заданий, Windows один раз спросит разрешение. Файлы из Проводника на остров перетаскиваться не будут"
-          }
-        >
-          <Toggle
-            on={!!autostart?.admin}
-            disabled={!autostart?.on || elevating}
-            onChange={setAdmin}
-          />
-        </Row>
-      </div>
+      {/* macOS has no such thing. */}
+      {!isMac && (
+        <>
+          <Heading>Запуск</Heading>
+          <div className="st-card">
+            <Row
+              title="Автозапуск от имени администратора"
+              hint={
+                autostart === null
+                  ? "Работает только в установленной версии"
+                  : !autostart.on
+                    ? "Сначала включи «Запускать вместе с Windows» в «Общих»"
+                    : "Через Планировщик заданий, Windows один раз спросит разрешение. Программы, открытые из поиска Lumen, тоже запустятся от администратора, а файлы из Проводника на остров перетаскиваться не будут"
+              }
+            >
+              <Toggle
+                on={!!autostart?.admin}
+                disabled={!autostart?.on || elevating}
+                onChange={setAdmin}
+              />
+            </Row>
+          </div>
+        </>
+      )}
 
       <Heading>Справочник кодов и протоколов</Heading>
       <div className="st-card">
@@ -125,6 +133,8 @@ export function AdvancedSection({ settings }: { settings: Settings }) {
           </button>
         </Row>
 
+        <LookupStatus />
+
         <Row
           title="Быстрый переход по hHelp:"
           hint="Напиши hHelp: в поиске Lumen для мгновенного перехода в репозиторий"
@@ -139,5 +149,51 @@ export function AdvancedSection({ settings }: { settings: Settings }) {
         </button>
       </div>
     </>
+  );
+}
+
+/** When the list was last downloaded from the repository (it's kept in memory only), and a button to do it now. */
+function LookupStatus() {
+  const [cache, setCache] = useState<LookupCache | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    invoke<LookupCache | null>("lookup_cached").then(setCache);
+    const unlisten = listen<LookupCache>("lumen://lookup", (e) => setCache(e.payload));
+    return () => {
+      unlisten.then((off) => off());
+    };
+  }, []);
+
+  const refresh = () => {
+    setBusy(true);
+    setError(null);
+    refreshLookup()
+      .then(setCache, (err) => setError(String(err)))
+      .finally(() => setBusy(false));
+  };
+
+  const index = (cache?.index ?? {}) as { http?: unknown[]; protocols?: unknown[] };
+  const when = cache && new Date(cache.fetchedAt).toLocaleString("ru", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <Row
+      title="Данные из репозитория"
+      hint={
+        error ? (
+          <span className="st-error">Не удалось скачать: {error}</span>
+        ) : cache ? (
+          `Загружено с GitHub ${when} · ${index.http?.length ?? 0} кодов, ${index.protocols?.length ?? 0} протоколов. Не сохраняется на диск, Lumen проверяет раз в час`
+        ) : (
+          "Ещё не загружены — h: заработает, как только Lumen скачает их с GitHub"
+        )
+      }
+    >
+      <button className="st-button" disabled={busy || !isTauri} onClick={refresh}>
+        {busy ? "Обновляю…" : "Обновить"}
+      </button>
+    </Row>
   );
 }

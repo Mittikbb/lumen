@@ -1,9 +1,18 @@
-//! Clipboard history: watches the Windows clipboard for new text and images,
+//! Clipboard history: watches the system clipboard for new text and images,
 //! remembers the last entries (persisted to disk) and pastes a chosen one into
 //! whatever app has focus. Lumen's window never takes focus, so the user's app
 //! stays active.
 
+#[cfg(target_os = "macos")]
+pub(crate) mod mac;
+#[cfg(windows)]
 pub(crate) mod win;
+
+/// This platform's clipboard.
+#[cfg(target_os = "macos")]
+pub(crate) use mac as sys;
+#[cfg(windows)]
+pub(crate) use win as sys;
 
 use std::{
     fs,
@@ -15,13 +24,12 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
-use windows::Win32::System::DataExchange::GetClipboardSequenceNumber;
 
 use crate::{
     pixels, secret,
     settings::{self, ClipboardPrefs},
 };
-use win::Content;
+use sys::Content;
 
 /// How a PNG file starts; sealed images don't.
 const PNG_SIGNATURE: &[u8] = b"\x89PNG";
@@ -238,13 +246,13 @@ pub fn clipboard_paste(id: u64, history: State<History>) -> Result<(), String> {
             let path = history.images_dir().ok_or("no data dir")?.join(&img.file);
             let png = read_image(&path).ok_or("broken image")?;
             let rgba = pixels::decode_png(&png).ok_or("broken image")?;
-            win::write_image(&rgba, &png)?;
+            sys::write_image(&rgba, &png)?;
         }
-        None => win::write_text(&entry.text)?,
+        None => sys::write_text(&entry.text)?,
     }
     // The watcher sees the new clipboard content and moves the entry to the top.
     thread::sleep(Duration::from_millis(40));
-    win::send_ctrl_v();
+    sys::send_ctrl_v();
     Ok(())
 }
 
@@ -282,7 +290,7 @@ pub fn spawn_watcher(app: AppHandle) {
         }
         *history.dir.lock().unwrap() = Some(dir);
         // A history kept in the clear by earlier versions gets sealed now.
-        if !stored.is_empty() && !stored.starts_with("dpapi:") {
+        if !stored.is_empty() && !secret::is_sealed(&stored) {
             history.seal_old_files();
         }
     }
@@ -290,16 +298,16 @@ pub fn spawn_watcher(app: AppHandle) {
     history.trim(&settings::get(&app).clipboard);
 
     thread::spawn(move || {
-        let mut seq = unsafe { GetClipboardSequenceNumber() };
+        let mut seq = sys::sequence();
         loop {
             thread::sleep(POLL);
-            let current = unsafe { GetClipboardSequenceNumber() };
+            let current = sys::sequence();
             if current == seq {
                 continue;
             }
             seq = current;
 
-            if let Some((content, source)) = win::read() {
+            if let Some((content, source)) = sys::read() {
                 let prefs = settings::get(&app).clipboard;
                 if source.as_deref().is_some_and(|s| ignored(&prefs, s)) {
                     continue;

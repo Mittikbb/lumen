@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isMac } from "../island/env";
 import { ENGINES } from "../launcher/engines";
 import { playerName } from "../media/useMedia";
 import { playChime } from "../timer/timer";
@@ -93,7 +94,10 @@ export function ModulesSection({ settings }: { settings: Settings }) {
 
       <Heading>Медиа</Heading>
       <div className="st-card">
-        <Row title="Ползунок громкости" hint="Регулировка громкости трека прямо в плеере">
+        <Row
+          title="Ползунок громкости"
+          hint={isMac ? "Громкость Spotify и Музыки прямо в плеере" : "Регулировка громкости трека прямо в плеере"}
+        >
           <Toggle
             on={settings.media?.volumeSlider ?? true}
             onChange={(volumeSlider) => updateSettings({ media: { volumeSlider } })}

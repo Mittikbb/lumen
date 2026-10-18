@@ -6,7 +6,7 @@
 use std::{
     sync::{
         Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
     time::Duration,
@@ -15,6 +15,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, State, WebviewWindow};
+#[cfg(windows)]
 use windows::Win32::{
     Foundation::{HWND, POINT, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
@@ -93,6 +94,26 @@ pub fn hidden() -> bool {
     HIDDEN.load(Ordering::Relaxed)
 }
 
+/// The island page's zoom (bits of an f64): how many screen points one CSS
+/// px takes. Only the "Масштаб" setting on macOS changes it from 1.
+static ZOOM: AtomicU64 = AtomicU64::new(0x3ff0_0000_0000_0000);
+
+fn zoom() -> f64 {
+    f64::from_bits(ZOOM.load(Ordering::Relaxed))
+}
+
+/// The zoom the settings ask for: the island's size on macOS, where a small
+/// screen otherwise makes it look big.
+#[cfg(target_os = "macos")]
+fn wanted_zoom(settings: &settings::Settings) -> f64 {
+    settings.display.scale.clamp(settings::MIN_SCALE, settings::MAX_SCALE)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn wanted_zoom(_settings: &settings::Settings) -> f64 {
+    1.0
+}
+
 #[tauri::command]
 pub fn set_hit_region(rects: Vec<Rect>, region: State<HitRegion>) {
     *region.0.lock().unwrap() = rects;
@@ -103,7 +124,7 @@ pub fn set_hit_region(rects: Vec<Rect>, region: State<HitRegion>) {
 #[derive(Default)]
 pub struct Focus {
     taken: Mutex<bool>,
-    /// Window that had focus before, as a raw HWND.
+    /// Window that had focus before, as a raw HWND (the app's pid on macOS).
     previous: Mutex<isize>,
 }
 
@@ -113,7 +134,7 @@ pub fn take_focus(app: &AppHandle) -> tauri::Result<()> {
     {
         let mut taken = focus.taken.lock().unwrap();
         if !*taken {
-            *focus.previous.lock().unwrap() = unsafe { GetForegroundWindow() }.0 as isize;
+            *focus.previous.lock().unwrap() = front_window();
         }
         *taken = true;
     }
@@ -140,8 +161,30 @@ pub fn release_focus(app: &AppHandle, restore: bool) {
     }
     let previous = *focus.previous.lock().unwrap();
     if restore && previous != 0 {
-        let _ = unsafe { SetForegroundWindow(HWND(previous as *mut _)) };
+        bring_back(previous);
     }
+}
+
+#[cfg(windows)]
+fn front_window() -> isize {
+    unsafe { GetForegroundWindow() }.0 as isize
+}
+
+#[cfg(windows)]
+fn bring_back(previous: isize) {
+    let _ = unsafe { SetForegroundWindow(HWND(previous as *mut _)) };
+}
+
+/// The app in front; if a click on the island already made that Lumen, the
+/// one in front before it.
+#[cfg(target_os = "macos")]
+fn front_window() -> isize {
+    crate::front::other_app().map_or_else(crate::front::previous, |(pid, _)| pid) as isize
+}
+
+#[cfg(target_os = "macos")]
+fn bring_back(previous: isize) {
+    crate::front::activate(previous as i32);
 }
 
 #[tauri::command]
@@ -211,17 +254,24 @@ fn place(window: &WebviewWindow) -> tauri::Result<()> {
     let origin = monitor.position();
     let screen = monitor.size().to_logical::<f64>(scale);
     let win = window.outer_size()?.to_logical::<f64>(window.scale_factor()?);
+    let zoom = wanted_zoom(&settings);
+    if zoom != self::zoom() {
+        window.set_zoom(zoom)?;
+        ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
+    }
+    // Sizes from the page are CSS px; the window is placed in points.
+    let glow_room = GLOW_ROOM * zoom;
 
     let (left, top, anchor) = match settings.display.position {
         None => ((screen.width - win.width) / 2.0, 0.0, None),
         Some(spot) => {
-            let half = widest_island(&settings) / 2.0 + EDGE;
+            let half = widest_island(&settings) * zoom / 2.0 + EDGE;
             let x = fit(spot.x * screen.width, half, screen.width - half);
             // Low enough that the tallest panel still fits in the window.
-            let y = fit(spot.y, 0.0, screen.height - (win.height - GLOW_ROOM));
+            let y = fit(spot.y, 0.0, screen.height - (win.height - glow_room));
             let left = fit(x - win.width / 2.0, 0.0, screen.width - win.width);
-            let top = fit(y - GLOW_ROOM, 0.0, screen.height - win.height);
-            (left, top, Some(Anchor { x: x - left, y: y - top }))
+            let top = fit(y - glow_room, 0.0, screen.height - win.height);
+            (left, top, Some(Anchor { x: (x - left) / zoom, y: (y - top) / zoom }))
         }
     };
 
@@ -274,7 +324,7 @@ pub fn overlay_drag_start(app: AppHandle) {
 #[tauri::command]
 pub fn overlay_drag_by(app: AppHandle, dx: f64, dy: f64) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("no island window")?;
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())? * zoom();
     let at = window.outer_position().map_err(|e| e.to_string())?;
     window
         .set_position(PhysicalPosition::new(
@@ -292,6 +342,7 @@ pub fn overlay_drag_end(app: AppHandle, x: f64, y: f64) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("no island window")?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let at = window.outer_position().map_err(|e| e.to_string())?;
+    let (x, y) = (x * zoom(), y * zoom());
     let (px, py) = (at.x as f64 + x * scale, at.y as f64 + y * scale);
 
     // The monitor under the island, or the closest one if it's in a gap.
@@ -329,6 +380,8 @@ pub fn redock(app: &AppHandle) {
 }
 
 pub fn dock_to_top(window: &WebviewWindow) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    float_above_menu_bar(window)?;
     place(window)?;
     window.set_ignore_cursor_events(true)?;
     // The window is created hidden and non-focusable (WS_EX_NOACTIVATE), and is
@@ -338,16 +391,121 @@ pub fn dock_to_top(window: &WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
 
+/// On macOS: above the menu bar (where the notch is), on every Space, and
+/// left out of Cmd+` window cycling. Fullscreen apps have their own Space,
+/// which the island stays out of.
+#[cfg(target_os = "macos")]
+fn float_above_menu_bar(window: &WebviewWindow) -> tauri::Result<()> {
+    use objc2_app_kit::{NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior};
+
+    let ns_window = window.ns_window()?;
+    // Setup runs on the main thread, where AppKit wants this.
+    let ns_window = unsafe { &*(ns_window as *const NSWindow) };
+    ns_window.setLevel(NSStatusWindowLevel);
+    ns_window.setCollectionBehavior(
+        NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::Stationary
+            | NSWindowCollectionBehavior::IgnoresCycle,
+    );
+    Ok(())
+}
+
+/// Where the pointer is, in CSS px relative to the island's window.
+#[cfg(windows)]
+struct Pointer {
+    hwnd: isize,
+}
+
+#[cfg(windows)]
+impl Pointer {
+    fn new(window: &WebviewWindow) -> Option<Self> {
+        window.hwnd().ok().map(|hwnd| Self { hwnd: hwnd.0 as isize })
+    }
+
+    fn read(&mut self, _dragging: bool) -> Option<(f64, f64)> {
+        // Straight from Win32 (what tauri reads underneath too): tauri's
+        // getters each make a round trip through the main thread, and
+        // three of them every 16 ms kept the event loop busy.
+        let hwnd = HWND(self.hwnd as *mut _);
+        let mut cursor = POINT::default();
+        let mut origin = RECT::default();
+        let dpi = unsafe {
+            if GetCursorPos(&mut cursor).is_err() || GetWindowRect(hwnd, &mut origin).is_err() {
+                return None;
+            }
+            GetDpiForWindow(hwnd)
+        };
+        if dpi == 0 {
+            return None;
+        }
+        let scale = dpi as f64 / 96.0;
+        Some((
+            (cursor.x - origin.left) as f64 / scale,
+            (cursor.y - origin.top) as f64 / scale,
+        ))
+    }
+}
+
+/// Where the pointer is, in CSS px relative to the island's window. The
+/// cursor comes from AppKit on every read (callable from any thread); the
+/// window's place through tauri, which goes via the main thread, so only a
+/// few times a second (and on every read while it's being dragged).
+#[cfg(target_os = "macos")]
+struct Pointer {
+    window: WebviewWindow,
+    /// Window's top-left in points, and the main display's height.
+    origin: Option<(f64, f64)>,
+    screen_height: f64,
+    reads: u32,
+}
+
+#[cfg(target_os = "macos")]
+impl Pointer {
+    /// Reads between looks at the window's place (~250 ms).
+    const REFRESH: u32 = 15;
+
+    fn new(window: &WebviewWindow) -> Option<Self> {
+        Some(Self {
+            window: window.clone(),
+            origin: None,
+            screen_height: 0.0,
+            reads: 0,
+        })
+    }
+
+    fn read(&mut self, dragging: bool) -> Option<(f64, f64)> {
+        use objc2_app_kit::NSEvent;
+        use objc2_core_graphics::{CGDisplayPixelsHigh, CGMainDisplayID};
+
+        if self.origin.is_none() || dragging || self.reads % Self::REFRESH == 0 {
+            let scale = self.window.scale_factor().ok()?;
+            let at = self.window.outer_position().ok()?.to_logical::<f64>(scale);
+            self.origin = Some((at.x, at.y));
+            // Points, like the rest: tao measures from the same display.
+            self.screen_height = CGDisplayPixelsHigh(CGMainDisplayID()) as f64;
+        }
+        self.reads = self.reads.wrapping_add(1);
+        let (left, top) = self.origin?;
+        // AppKit counts from the bottom-left of the main display, upwards.
+        let cursor = NSEvent::mouseLocation();
+        let zoom = zoom();
+        Some((
+            (cursor.x - left) / zoom,
+            (self.screen_height - cursor.y - top) / zoom,
+        ))
+    }
+}
+
 pub fn spawn_cursor_tracker(app: AppHandle) {
     thread::spawn(move || {
         let mut was_catching = false;
         let mut was_near = false;
 
         // The window and its handle, looked up once.
-        let (window, hwnd) = loop {
+        let (window, mut pointer) = loop {
             if let Some(window) = app.get_webview_window("main") {
-                if let Ok(hwnd) = window.hwnd() {
-                    break (window, hwnd.0 as isize);
+                if let Some(pointer) = Pointer::new(&window) {
+                    break (window, pointer);
                 }
             }
             thread::sleep(Duration::from_millis(16));
@@ -359,25 +517,10 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
                 continue;
             }
 
-            // Straight from Win32 (what tauri reads underneath too): tauri's
-            // getters each make a round trip through the main thread, and
-            // three of them every 16 ms kept the event loop busy.
-            let hwnd = HWND(hwnd as *mut _);
-            let mut cursor = POINT::default();
-            let mut origin = RECT::default();
-            let dpi = unsafe {
-                if GetCursorPos(&mut cursor).is_err() || GetWindowRect(hwnd, &mut origin).is_err() {
-                    continue;
-                }
-                GetDpiForWindow(hwnd)
-            };
-            if dpi == 0 {
+            let dragging = app.state::<Dragging>().0.load(Ordering::SeqCst);
+            let Some((x, y)) = pointer.read(dragging) else {
                 continue;
-            }
-            let scale = dpi as f64 / 96.0;
-
-            let x = (cursor.x - origin.left) as f64 / scale;
-            let y = (cursor.y - origin.top) as f64 / scale;
+            };
             let region = app.state::<HitRegion>();
             let (inside, catches, near) = {
                 let rects = region.0.lock().unwrap();
@@ -392,9 +535,15 @@ pub fn spawn_cursor_tracker(app: AppHandle) {
             };
 
             // While dragging, the window keeps the mouse (see overlay_drag_start).
-            if app.state::<Dragging>().0.load(Ordering::SeqCst) {
+            if dragging {
                 was_catching = true;
             } else if catches != was_catching {
+                // The pointer comes over the island from the app the user is
+                // in: the one to hand the front back to after a click.
+                #[cfg(target_os = "macos")]
+                if catches {
+                    crate::front::remember();
+                }
                 let _ = window.set_ignore_cursor_events(!catches);
                 was_catching = catches;
             }
@@ -424,12 +573,20 @@ pub fn spawn_fullscreen_watch(app: AppHandle) {
             let Some(window) = app.get_webview_window("main") else {
                 continue;
             };
+            #[cfg(windows)]
             let Ok(hwnd) = window.hwnd() else {
                 continue;
             };
             let (display, games) = settings::read(&app, |s| (s.display.clone(), s.games.stats));
             let cover = if display.hide_fullscreen || display.hide_maximized || games {
-                cover_in_front(HWND(hwnd.0))
+                #[cfg(windows)]
+                {
+                    cover_in_front(HWND(hwnd.0))
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    cover_in_front(&window)
+                }
             } else {
                 Cover::default()
             };
@@ -471,6 +628,77 @@ struct Cover {
     title: String,
 }
 
+/// On macOS: the front app's windows from the window server (bounds need no
+/// Screen Recording permission), against the island's display. Native
+/// fullscreen apps live in their own Space, where the island isn't anyway;
+/// this catches games and players that cover the screen in place.
+#[cfg(target_os = "macos")]
+fn cover_in_front(island: &WebviewWindow) -> Cover {
+    use objc2_core_graphics::{CGWindowListCopyWindowInfo, CGWindowListOption};
+    use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
+
+    let Some((pid, name)) = crate::front::other_app() else {
+        return Cover::default();
+    };
+    // The island's display, in points from the main display's top-left.
+    let Some(monitor) = island.current_monitor().ok().flatten() else {
+        return Cover::default();
+    };
+    let scale = monitor.scale_factor();
+    let origin = monitor.position().to_logical::<f64>(scale);
+    let size = monitor.size().to_logical::<f64>(scale);
+    let Some(list) = CGWindowListCopyWindowInfo(
+        CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements,
+        0,
+    ) else {
+        return Cover::default();
+    };
+    // Toll-free bridged: a CFArray of CFDictionaries is an NSArray of NSDictionaries.
+    let windows = unsafe { &*(&*list as *const _ as *const NSArray<NSDictionary>) };
+    let number = |dict: &NSDictionary, key: &str| {
+        dict.objectForKey(&NSString::from_str(key))?
+            .downcast::<NSNumber>()
+            .ok()
+            .map(|n| n.doubleValue())
+    };
+    let mut cover = Cover {
+        pid: pid as u32,
+        title: name,
+        ..Cover::default()
+    };
+    for window in windows.iter() {
+        if number(&window, "kCGWindowOwnerPID") != Some(pid as f64) || number(&window, "kCGWindowLayer") != Some(0.0) {
+            continue;
+        }
+        let Some(bounds) = window
+            .objectForKey(&NSString::from_str("kCGWindowBounds"))
+            .and_then(|b| b.downcast::<NSDictionary>().ok())
+        else {
+            continue;
+        };
+        let (Some(x), Some(y), Some(w), Some(h)) = (
+            number(&bounds, "X"),
+            number(&bounds, "Y"),
+            number(&bounds, "Width"),
+            number(&bounds, "Height"),
+        ) else {
+            continue;
+        };
+        let covers_width = x <= origin.x + 1.0 && x + w >= origin.x + size.width - 1.0;
+        if !covers_width || y > origin.y + size.height || y + h < origin.y {
+            continue;
+        }
+        if y <= origin.y + 1.0 && y + h >= origin.y + size.height - 1.0 {
+            cover.fullscreen = true;
+        } else if h >= size.height * 0.8 {
+            // Zoomed: everything but the menu bar (and maybe the Dock).
+            cover.maximized = true;
+        }
+    }
+    cover
+}
+
+#[cfg(windows)]
 fn cover_in_front(island: HWND) -> Cover {
     unsafe {
         let front = GetForegroundWindow();

@@ -1,26 +1,44 @@
+// Modules built on Windows APIs have a macOS twin in `macos/` with the same
+// commands and functions, swapped in by `path`; the rest is shared.
+mod addons;
 mod audio;
+#[cfg_attr(target_os = "macos", path = "macos/bluetooth.rs")]
 mod bluetooth;
 mod browser;
+#[cfg_attr(target_os = "macos", path = "macos/capture.rs")]
 mod capture;
 mod clipboard;
 mod discord;
 mod downloads;
+#[cfg(target_os = "macos")]
+#[path = "macos/front.rs"]
+mod front;
+#[cfg_attr(target_os = "macos", path = "macos/games.rs")]
 mod games;
 mod hotkeys;
+#[cfg_attr(target_os = "macos", path = "macos/keyboard.rs")]
 mod keyboard;
 mod launcher;
+#[cfg_attr(target_os = "macos", path = "macos/logon_task.rs")]
 mod logon_task;
+mod lookup;
+#[cfg_attr(target_os = "macos", path = "macos/media.rs")]
 mod media;
 mod net;
 mod overlay;
 mod pixels;
+// Only Windows has one; macOS reads the same settings elsewhere.
+#[cfg(windows)]
 mod registry;
+#[cfg_attr(target_os = "macos", path = "macos/secret.rs")]
 mod secret;
 mod settings;
 mod shelf;
+#[cfg_attr(target_os = "macos", path = "macos/shell_image.rs")]
 mod shell_image;
 mod tray;
 mod updates;
+#[cfg_attr(target_os = "macos", path = "macos/volume.rs")]
 mod volume;
 
 use tauri::Manager;
@@ -37,6 +55,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(shelf::on_drop)
+        .register_uri_scheme_protocol(addons::SCHEME, addons::protocol)
         .manage(overlay::HitRegion::default())
         .manage(overlay::Focus::default())
         .manage(overlay::AnchorState::default())
@@ -51,6 +70,8 @@ pub fn run() {
         .manage(discord::Discord::default())
         .manage(updates::Updates::default())
         .manage(downloads::Downloads::default())
+        .manage(addons::Addons::default())
+        .manage(lookup::Lookup::default())
         .invoke_handler(tauri::generate_handler![
             overlay::set_hit_region,
             overlay::overlay_take_focus,
@@ -109,6 +130,18 @@ pub fn run() {
             hotkeys::hotkeys_busy,
             downloads::downloads_reveal,
             games::games_preview,
+            lookup::lookup_cached,
+            lookup::lookup_refresh,
+            addons::addons_list,
+            addons::addons_open_folder,
+            addons::addons_storage_get,
+            addons::addons_storage_set,
+            addons::addons_copy,
+            addons::addons_fetch,
+            addons::addons_watch_front,
+            addons::addons_front,
+            addons::addons_pause_hotkeys,
+            addons::addons_terminal,
         ])
         .setup(|app| {
             let window = app
@@ -116,6 +149,9 @@ pub fn run() {
                 .expect("main window is missing");
 
             settings::init(app.handle());
+            // No Dock icon: the island and the menu bar icon are Lumen's handles.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             overlay::dock_to_top(&window)?;
             overlay::spawn_cursor_tracker(app.handle().clone());
             overlay::spawn_fullscreen_watch(app.handle().clone());
@@ -131,6 +167,8 @@ pub fn run() {
             downloads::spawn_watcher(app.handle().clone());
             keyboard::spawn_watcher(app.handle().clone());
             bluetooth::spawn_watcher(app.handle().clone());
+            addons::init(app.handle());
+            lookup::init(app.handle());
 
             Ok(())
         })

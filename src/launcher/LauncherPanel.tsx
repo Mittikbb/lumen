@@ -7,6 +7,7 @@ import {
   getDropletAccent,
   getCategoryName,
   NetworkSearchResult,
+  HttpCodeInfo,
 } from "./httpCodes";
 import { fuzzyScore } from "./fuzzy";
 import { App, launcher, useAppIcon, useApps } from "./useLauncher";
@@ -15,6 +16,9 @@ import { isTauri } from "../island/env";
 import { formatShortcut, Hotkeys, openSettings, SearchEngine, CodeBorderColor } from "../settings/useSettings";
 import { ENGINES } from "./engines";
 import { formatSpan, isTimerQuery, parseTimer, timer } from "../timer/timer";
+import { AddonResults, prefixOwner, selectAddonResult, useAddonSearch } from "../addons/host";
+import { AddonIcon } from "../addons/AddonPanel";
+import { ensureFresh, lookupState, refreshLookup, useLookupData } from "./lookupData";
 
 const URL_LIKE = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
@@ -67,6 +71,7 @@ function buildResults(
   engine: SearchEngine,
   maxApps: number,
   lookup: boolean,
+  addons: AddonResults[],
 ): Result[] {
   const q = query.trim();
   const out: Result[] = [];
@@ -77,6 +82,11 @@ function buildResults(
     }
     return out;
   }
+
+  // An addon owns queries with its prefix ("-ipconfig"): only its answers,
+  // so Enter can't fall through to a web search while it's still thinking.
+  const owner = prefixOwner(q);
+  if (owner) return addonRows(addons.filter((r) => r.addon.id === owner.id));
 
   // Screen capture by keyword: "скрин", "screenshot", "текст", "ocr"...
   const lower = q.toLowerCase();
@@ -191,14 +201,26 @@ function buildResults(
               <span className={`http-tag http-tag-${item.category}`}>{item.code}</span>
               <span className="http-phrase">{item.phrase}</span>
               <span className="http-sep">·</span>
-              <span className="http-name-ru">{item.nameRu}</span>
+              {item.nameRu && <span className="http-name-ru">{item.nameRu}</span>}
             </span>
           ),
           hint: `${item.description} · Enter — открыть инфо`,
-          run: () => launcher.copy(`HTTP ${item.code} ${item.phrase} (${item.nameRu}): ${item.description}`),
+          run: () => launcher.copy(httpLine(item)),
         });
       }
     }
+  } else if (isHttpQuery && !/^https?:\/\//i.test(q) && lookupState() !== "ready") {
+    // The codes and protocols only ever come from GitHub.
+    const failed = lookupState() === "failed";
+    out.push({
+      key: "http:loading",
+      icon: ICONS.http,
+      title: failed ? "Не удалось загрузить справочник с GitHub" : "Справочник загружается с GitHub…",
+      hint: failed ? "Проверь интернет · Enter — попробовать снова" : "lackyhy/Protocol-list",
+      run: () => {
+        if (failed) refreshLookup().catch(() => {});
+      },
+    });
   } else if (isHttpQuery && !/^https?:\/\//i.test(q)) {
     out.push({
       key: "http:not-found",
@@ -226,6 +248,10 @@ function buildResults(
       );
   }
 
+  // Answers from addons, after the apps: they arrive a moment later, so the
+  // first results don't move under the cursor.
+  if (!isHttpQuery) out.push(...addonRows(addons));
+
   if (URL_LIKE.test(q)) {
     const url = /^https?:\/\//i.test(q) ? q : `https://${q}`;
     out.push({ key: "url", icon: ICONS.link, title: `Открыть ${q}`, hint: "Сайт", run: () => launcher.openUrl(url) });
@@ -250,6 +276,22 @@ function buildResults(
   });
 
   return out;
+}
+
+/** "HTTP 404 Not Found (Ресурс не найден): …", the Russian name only when there is one. */
+const httpLine = (c: HttpCodeInfo) =>
+  `HTTP ${c.code} ${c.phrase}${c.nameRu ? ` (${c.nameRu})` : ""}: ${c.description}`;
+
+function addonRows(addons: AddonResults[]): Result[] {
+  return addons.flatMap(({ addon, items }) =>
+    items.map((item) => ({
+      key: `addon:${addon.id}:${item.id}`,
+      icon: <AddonIcon addon={addon} icon={item.icon} />,
+      title: item.title,
+      hint: item.hint ? `${item.hint} · ${addon.name}` : addon.name,
+      run: () => selectAddonResult(addon, item),
+    })),
+  );
 }
 
 function DropletCard({
@@ -314,7 +356,7 @@ function DropletCard({
         {item.kind === "http" ? (
           <>
             <span className="droplet-category-label">{getCategoryName(item.category)}</span>
-            <span className="droplet-name-ru">{item.nameRu}</span>
+            {item.nameRu && <span className="droplet-name-ru">{item.nameRu}</span>}
           </>
         ) : item.kind === "protocol" ? (
           <>
@@ -420,12 +462,20 @@ export function LauncherPanel({
     onDetailChange?.(item);
   };
 
+  const addonResults = useAddonSearch(query);
+  // Codes and protocols, only ever from Protocol-list on GitHub.
+  const lookupData = useLookupData(lookup);
   const results = useMemo(
-    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup),
-    [query, apps, ai, hotkeys, engine, maxApps, lookup],
+    () => buildResults(query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults),
+    // lookupData: a new copy of the list changes what the same query finds.
+    [query, apps, ai, hotkeys, engine, maxApps, lookup, addonResults, lookupData],
   );
 
   // Fresh, focused search box every time the launcher opens.
+  useEffect(() => {
+    if (open && lookup) ensureFresh();
+  }, [open, lookup]);
+
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -447,9 +497,7 @@ export function LauncherPanel({
   const handleCopyCurrent = () => {
     if (!currentDetail) return;
     if (currentDetail.kind === "http") {
-      launcher.copy(
-        `HTTP ${currentDetail.code} ${currentDetail.phrase} (${currentDetail.nameRu}): ${currentDetail.description}`,
-      );
+      launcher.copy(httpLine(currentDetail));
     } else if (currentDetail.kind === "protocol") {
       launcher.copy(`${currentDetail.name} (${currentDetail.fullName}): ${currentDetail.description}`);
     } else {

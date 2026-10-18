@@ -60,7 +60,8 @@ export function useMedia(): NowPlaying | null {
 
 /**
  * Friendly player name from an SMTC app id ("Spotify.exe", "308046B0AF4A39CB",
- * ...): the one you gave it in the settings, or a built-in one.
+ * ...) or a macOS bundle id ("com.spotify.client"): the one you gave it in
+ * the settings, or a built-in one.
  */
 export function playerName(app: string, names?: Record<string, string>) {
   const own = names?.[app]?.trim();
@@ -76,6 +77,11 @@ export function playerName(app: string, names?: Record<string, string>) {
   if (id.includes("msedge")) return "Edge";
   if (id.includes("firefox") || id === "308046b0af4a39cb") return "Firefox";
   if (id.includes("zunemusic") || id.includes("media.player")) return "Медиаплеер";
+  // macOS bundle ids: "com.apple.Music", "com.apple.Safari", "org.videolan.vlc"...
+  if (id === "com.apple.music") return "Музыка";
+  if (id === "com.apple.safari") return "Safari";
+  if (id.includes("vlc")) return "VLC";
+  if (!id.endsWith(".exe") && /^[a-z0-9-]+(\.[a-z0-9-]+){2,}$/.test(id)) return app.split(".").pop()!;
   return app.replace(/\.exe$/i, "").split("!")[0];
 }
 

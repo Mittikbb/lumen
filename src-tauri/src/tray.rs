@@ -1,5 +1,5 @@
-//! Tray icon: the only visible handle on Lumen besides the island itself, with
-//! settings, the "start with Windows" toggle and quit.
+//! Tray icon (the menu bar on macOS): the only visible handle on Lumen besides
+//! the island itself, with settings, the "start with Windows" toggle and quit.
 
 use std::fs;
 
@@ -11,11 +11,12 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 
-use windows::Win32::Foundation::HWND;
-
-use crate::{logon_task, registry, settings};
+#[cfg(windows)]
+use crate::registry;
+use crate::{logon_task, settings};
 
 /// Where Windows keeps per-user autostart entries.
+#[cfg(windows)]
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 /// Marks that autostart was set up once, so a user's "off" choice sticks.
@@ -34,6 +35,10 @@ struct AutostartItem(CheckMenuItem<Wry>);
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
     prepare_autostart(app);
+    if !cfg!(debug_assertions) {
+        // Asks schtasks: off the startup path.
+        std::thread::spawn(logon_task::refresh);
+    }
 
     // Dev builds would register the temporary debug executable, so the toggle
     // only works in installed (release) builds.
@@ -42,7 +47,11 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         app,
         "autostart",
         if release {
-            "Запускать вместе с Windows"
+            if cfg!(target_os = "macos") {
+                "Открывать при входе в систему"
+            } else {
+                "Запускать вместе с Windows"
+            }
         } else {
             "Автозапуск (только в установленной версии)"
         },
@@ -111,7 +120,7 @@ pub fn set_autostart(app: &AppHandle, on: bool) -> Option<Autostart> {
     } else {
         let _ = manager.disable();
         if logon_task::exists() {
-            logon_task::remove(uac_parent(app));
+            logon_task::remove(app);
         }
     }
     publish(app)
@@ -126,10 +135,10 @@ pub fn set_autostart_admin(app: &AppHandle, admin: bool) -> Option<Autostart> {
     let manager = app.autolaunch();
     if admin {
         // Only one of the two may start Lumen.
-        if logon_task::create(uac_parent(app)) {
+        if logon_task::create(app) {
             let _ = manager.disable();
         }
-    } else if logon_task::remove(uac_parent(app)) {
+    } else if logon_task::remove(app) {
         let _ = manager.enable();
     }
     publish(app)
@@ -143,12 +152,6 @@ fn publish(app: &AppHandle) -> Option<Autostart> {
     }
     let _ = app.emit("lumen://autostart", now);
     Some(now)
-}
-
-/// The settings window, so the UAC prompt comes up over it.
-fn uac_parent(app: &AppHandle) -> Option<HWND> {
-    let hwnd = app.get_webview_window(settings::WINDOW)?.hwnd().ok()?;
-    Some(HWND(hwnd.0))
 }
 
 /// Turns autostart on at the first run. Later runs fix the entry only if it
@@ -176,7 +179,14 @@ fn prepare_autostart(app: &AppHandle) {
     }
 }
 
+/// The login item on macOS names the app bundle, which moves as a whole.
+#[cfg(not(windows))]
+fn autostart_is_stale(_app: &AppHandle) -> bool {
+    false
+}
+
 /// Whether the autostart entry exists but starts some other exe.
+#[cfg(windows)]
 fn autostart_is_stale(app: &AppHandle) -> bool {
     let Ok(exe) = std::env::current_exe() else {
         return false;
